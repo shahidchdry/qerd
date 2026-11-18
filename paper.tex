@@ -74,31 +74,7 @@
 \providecommand{\qerUnwhitenedFashionRows}{}
 \providecommand{\qerPureQpuRows}{}
 
-% Figure auto-loader macro: checks workspace root first, then paper_suite/, else vector box
-\newcommand{\figslot}[3][0.96\linewidth]{%
-  \IfFileExists{#2}{%
-    \includegraphics[width=#1]{#2}%
-  }{%
-    \IfFileExists{paper_suite/#2}{%
-      \includegraphics[width=#1]{paper_suite/#2}%
-    }{%
-      \fcolorbox{slotborder}{slotbg}{%
-        \begin{minipage}[c][3.2cm][c]{0.92\linewidth}
-          \centering
-          \textbf{\small [Figure Slot: \texttt{\detokenize{#2}}]}\\[0.45em]
-          {\footnotesize\color{black!75} #3}\\[0.45em]
-          {\scriptsize\color{qerblue} Missing figure asset.}
-        \end{minipage}%
-      }%
-    }%
-  }%
-}
-
-\IfFileExists{paper_tables.tex}{%
-  \input{paper_tables.tex}%
-}{%
-  \IfFileExists{paper_suite/paper_tables.tex}{\input{paper_suite/paper_tables.tex}}{}%
-}
+\input{paper_suite/paper_tables.tex}
 
 \begin{document}
 
@@ -341,23 +317,23 @@ Exact-AD ($200$ st, Surrogate) & 224 & $85.6 \pm 3.7\%$ & $3.66 \pm 0.03$ & $1.5
 
 \begin{figure}[t!]
 \centering
-\figslot[0.80\linewidth]{figures/fig_shot_scaling.pdf}{Shot-Budget Scaling Curves ($10\text{k} \to 160\text{k}$ shots on MNIST).}
+\includegraphics[width=0.80\linewidth]{paper_suite/figures/fig_shot_scaling.pdf}
 \caption{\textbf{Shot-Budget Scaling ($10\text{k} \to 160\text{k}$ Shots on MNIST, $3$ Seeds).} QER reaches $84.1\%$ at $10\text{k}$ shots ($25$ steps), $98.6\%$ at $20\text{k}$ shots ($50$ steps), and $100.0\%$ at $80\text{k}$ shots, whereas equal-shot \texttt{Adam-SPSA} remains stalled at $12.0\%$--$18.2\%$.}
 \label{fig:shot_scaling}
 \end{figure}
 
 \begin{figure}[t!]
 \centering
-\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_mnist_qerd.png}{MNIST QER}\caption{QER -- MNIST}\end{subfigure}\hfill
-\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_mnist_psr.png}{MNIST PSR}\caption{PSR -- MNIST}\end{subfigure}\hfill
-\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_mnist_spsa.png}{MNIST SPSA}\caption{SPSA -- MNIST}\end{subfigure}\hfill
-\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_mnist_ddpm.png}{MNIST DDPM}\caption{DDPM -- MNIST}\end{subfigure}\hfill
-\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_mnist_real.png}{MNIST Real}\caption{Real -- MNIST}\end{subfigure}\\[0.40em]
-\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_fashion_qerd.png}{Fashion QER}\caption{QER -- Fashion}\end{subfigure}\hfill
-\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_fashion_psr.png}{Fashion PSR}\caption{PSR -- Fashion}\end{subfigure}\hfill
-\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_fashion_spsa.png}{Fashion SPSA}\caption{SPSA -- Fashion}\end{subfigure}\hfill
-\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_fashion_ddpm.png}{Fashion DDPM}\caption{DDPM -- Fashion}\end{subfigure}\hfill
-\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_fashion_real.png}{Fashion Real}\caption{Real -- Fashion}\end{subfigure}
+\begin{subfigure}[b]{0.188\textwidth}\includegraphics[width=\linewidth]{paper_suite/figures/sample_mnist_qerd.png}\caption{QER -- MNIST}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\includegraphics[width=\linewidth]{paper_suite/figures/sample_mnist_psr.png}\caption{PSR -- MNIST}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\includegraphics[width=\linewidth]{paper_suite/figures/sample_mnist_spsa.png}\caption{SPSA -- MNIST}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\includegraphics[width=\linewidth]{paper_suite/figures/sample_mnist_ddpm.png}\caption{DDPM -- MNIST}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\includegraphics[width=\linewidth]{paper_suite/figures/sample_mnist_real.png}\caption{Real -- MNIST}\end{subfigure}\\[0.40em]
+\begin{subfigure}[b]{0.188\textwidth}\includegraphics[width=\linewidth]{paper_suite/figures/sample_fashion_qerd.png}\caption{QER -- Fashion}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\includegraphics[width=\linewidth]{paper_suite/figures/sample_fashion_psr.png}\caption{PSR -- Fashion}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\includegraphics[width=\linewidth]{paper_suite/figures/sample_fashion_spsa.png}\caption{SPSA -- Fashion}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\includegraphics[width=\linewidth]{paper_suite/figures/sample_fashion_ddpm.png}\caption{DDPM -- Fashion}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\includegraphics[width=\linewidth]{paper_suite/figures/sample_fashion_real.png}\caption{Real -- Fashion}\end{subfigure}
 \caption{\textbf{Generated Mode Synthesis Grids ($8$ samples/class, rows $0$--$9$, seed $0$, $80\text{k}$ NISQ Shots).} QERD yields legible class-conditional generations comparable to noiseless \texttt{DDPM}, whereas equal-shot \texttt{PSR} and \texttt{SPSA} collapse to noise.}
 \label{fig:samples_grid}
 \end{figure}
@@ -405,7 +381,7 @@ The cleanest pure-quantum test is the autoencoder-free $12$-qubit cluster spin g
 
 \begin{figure}[t!]
 \centering
-\figslot[0.83\linewidth]{analysis/fig_spinglass_diagnosis.pdf}{Four-Panel 3-Seed Spin-Glass Factorial Attribution.}
+\includegraphics[width=0.83\linewidth]{analysis/fig_spinglass_diagnosis.pdf}
 \caption{\textbf{Controlled $3$-Seed Spin-Glass Attribution ($40\text{k}$ Shots).} Sparse/unentangled topologies (\texttt{no-zz}, \texttt{chain}, \texttt{grid4}) and equal-shot \texttt{SPSA}/\texttt{PSR} remain near zero correlation, whereas depth $L=4$ with \texttt{FwdOLS} and residual nudging (\texttt{QER-Res}) achieves $100.0\%$ mode coverage and recovers $80\%$--$95\%$ of matched clean \texttt{Exact-AD} accuracy.}
 \label{fig:spinglass_diagnosis}
 \end{figure}
@@ -447,7 +423,7 @@ Trained SpinGlass $L=4$: $t=125$ ($\max|\theta|{=}0.53$) & $0.124$ / $0.127$ & $
 
 \begin{figure}[t!]
 \centering
-\figslot[0.83\linewidth]{analysis/fig_grad_fidelity_proof.pdf}{Four-Panel 3-Seed Gradient Fidelity Validation.}
+\includegraphics[width=0.83\linewidth]{analysis/fig_grad_fidelity_proof.pdf}
 \caption{\textbf{$3$-Seed Surrogate vs.\ MSE Decomposition, Residual Nudge Verification (\texttt{QER-Res}), and Batch-Window Shot SNR (MNIST).} Target nudging ($\mathbf{x}_0$) tracks $\nabla_\theta\mathbb{E}[\mathbf{x}_0^\top\mathbf{z}]$ ($+0.378$--$+0.995$ on $ZZ$), while residual nudging ($\mathbf{x}_0-\mathbf{z}_{\text{free}}$) keeps MSE cosines strictly positive ($+0.289$--$+0.994$) and sustains high NISQ SNR across batch windows.}
 \label{fig:grad_fidelity_proof}
 \end{figure}
@@ -486,7 +462,7 @@ One control keeps this result honest: classical Binomial noise-dose baselines ($
 
 \begin{figure}[t!]
 \centering
-\figslot[0.83\linewidth]{analysis/fig_hybrid_qpu_diversity.pdf}{Two-Panel Hybrid QERLayer Scaling Across 24 NISQ Shots.}
+\includegraphics[width=0.83\linewidth]{analysis/fig_hybrid_qpu_diversity.pdf}
 \caption{\textbf{End-to-End Hybrid Scaling via \texttt{QERLayer} ($3$ Seeds, $N=2{,}000$).} Hardware-in-the-loop surrogate differentiation avoids the $7.0$--$9.4\text{ pp}$ accuracy drop and $+48.7$ to $+71.7$ \texttt{FeatFID} degradation suffered by unadapted clean-trained \texttt{ExactAD} under $24$-shot NISQ deployment, while matched $6$-shot classical noise confirms stochastic regularization drives diversity.}
 \label{fig:hybrid_qpu_diversity}
 \end{figure}
@@ -576,7 +552,7 @@ Alongside PSR and SPSA, we tested \texttt{PQC-QuDDPM} and \texttt{QCBM-MMD} unde
 
 \begin{figure}[ht!]
 \centering
-\figslot[0.82\linewidth]{figures/fig_main_comparison.pdf}{Main 5-Seed Comparison Bars across MNIST \& Fashion-MNIST.}
+\includegraphics[width=0.82\linewidth]{paper_suite/figures/fig_main_comparison.pdf}
 \caption{\textbf{Main $5$-Seed Benchmark Bars Across NISQ Optimizers, Literature Baselines, and Noiseless References.} QER solves $198$--$224$p joint optimization under $80\text{k}$ shots where SPSA/PSR/PQC baselines collapse.}
 \label{fig:main_comparison}
 \end{figure}
@@ -617,7 +593,7 @@ Alongside PSR and SPSA, we tested \texttt{PQC-QuDDPM} and \texttt{QCBM-MMD} unde
 
 \begin{figure}[ht!]
 \centering
-\figslot[0.82\linewidth]{figures/fig_complexity_timing.pdf}{Gradient Complexity and CUDA Simulator Throughput.}
+\includegraphics[width=0.82\linewidth]{paper_suite/figures/fig_complexity_timing.pdf}
 \caption{\textbf{Circuit Evaluation Scaling and Batched CUDA Trajectory Throughput.} Contrastive estimation executes $200$ full updates inside the same $80\text{k}$-shot budget where PSR completes $17$--$22$ steps ($13.32\,\text{s}$ MNIST, $56.82\,\text{s}$ Fashion).}
 \label{fig:complexity_timing}
 \end{figure}
@@ -645,7 +621,7 @@ Even when we hold $W_{\text{cond}}\mathbf{c}$ fixed or apply exact chain-rule gr
 
 \begin{figure}[ht!]
 \centering
-\figslot[0.78\linewidth]{analysis/fig_conditioning_opt_controls.pdf}{Four-Panel 3-Seed Causal \& Optimizer Controls.}
+\includegraphics[width=0.78\linewidth]{analysis/fig_conditioning_opt_controls.pdf}
 \caption{\textbf{Causal $W_{\text{cond}}\mathbf{c}$ Disentanglement, Chain-Rule / QN-SPSA / PSR Baselines, and Sum-Normalized Scaling ($3$ Seeds).} (a) Zero-$W_{\text{cond}}$ label qubits; (b) Chain-Rule $W_{\text{cond}}$ and PSR/SPSA failures ($10.2\%$--$25.9\%$); (c--d) shallow sum-norm BP variance and $4\text{k}$-shot SNR ($n=6\to 14$).}
 \label{fig:cond_opt_controls}
 \end{figure}
@@ -751,7 +727,7 @@ Tables~\ref{tab:abl_mnist}--\ref{tab:abl_fashion} and Figure~\ref{fig:ablations}
 
 \begin{figure}[ht!]
 \centering
-\figslot[0.78\linewidth]{figures/fig_ablations.pdf}{6-Row Component Ablation Study on MNIST and Fashion-MNIST.}
+\includegraphics[width=0.78\linewidth]{paper_suite/figures/fig_ablations.pdf}
 \caption{\textbf{Six-Row Component and OLS Calibration Ablation ($3$ Seeds, $80\text{k}$ Shots).}}
 \label{fig:ablations}
 \end{figure}
@@ -800,7 +776,7 @@ To map where contrastive surrogates align with exact MSE gradients, we sweep tra
 
 \begin{figure}[ht!]
 \centering
-\figslot[0.82\linewidth]{figures/fig_grad_alignment.pdf}{Gradient Alignment Across Steps, Beta, Depth L, and Depol Noise.}
+\includegraphics[width=0.82\linewidth]{paper_suite/figures/fig_grad_alignment.pdf}
 \caption{\textbf{Empirical Gradient Alignment Survey Across Trajectory Steps, $\beta$, Depth $L$, and Depolarizing Noise.}}
 \label{fig:grad_alignment}
 \end{figure}
@@ -884,14 +860,14 @@ The multi-panel diagnostics in Figures~\ref{fig:reciprocity_stepper} and~\ref{fi
 
 \begin{figure}[ht!]
 \centering
-\figslot[0.74\linewidth]{analysis/fig_reciprocity_stepper_checks.pdf}{Three-Panel Suite: Trained L=2 Checkpoints, Stepper Isolation, Exact-AD Init.}
+\includegraphics[width=0.74\linewidth]{analysis/fig_reciprocity_stepper_checks.pdf}
 \caption{\textbf{Trained Reciprocity, Stepper Factor Isolation, and Schedule Controls ($3$ Seeds).} (a) $L=2$ Clean/NISQ checkpoint reciprocity; (b) $\beta_1$ vs.\ $\beta_2$ factor isolation and $\beta_0=11.0$ guard rescue; (c) $L=4$ Spin-Glass \texttt{Exact-AD} initialization and cosine schedule effects.}
 \label{fig:reciprocity_stepper}
 \end{figure}
 
 \begin{figure}[ht!]
 \centering
-\figslot[0.74\linewidth]{analysis/fig_matched_controls.pdf}{Four-Panel Matched Control Suite: Same-Circuit Exact-AD, L=4 Spin-Glass, Reciprocity, Hybrid PSR.}
+\includegraphics[width=0.74\linewidth]{analysis/fig_matched_controls.pdf}
 \caption{\textbf{Matched Same-Circuit \texttt{Exact-AD}, $L=4$ Spin-Glass, and Hybrid Field-PSR Controls ($3$ Seeds).} (a) Same-circuit noiseless \texttt{Exact-AD} on MNIST and Fashion-MNIST; (b) matched $L=4$ Spin-Glass \texttt{Exact-AD} (\texttt{MSE+FwdOLS+rand08+Cosine}, $92.2\%$--$94.5\%$); (c) trained $L=4$ Spin-Glass Clean vs.\ NISQ reciprocity; (d) equal-shot ($1.38\text{M}$ shots) hybrid \texttt{QERLayer} vs.\ field-wise \texttt{PSR} ($h=48$).}
 \label{fig:matched_controls}
 \end{figure}
@@ -908,7 +884,7 @@ Under stronger single-qubit depolarizing rates ($p_{\text{depol}} \in [0, 0.08]$
 
 \begin{figure}[ht!]
 \centering
-\figslot[0.82\linewidth]{figures/fig_noise_topo.pdf}{NISQ Hardware Realism Sweeps: 1Q Depol, Topology, and 2Q Depth.}
+\includegraphics[width=0.82\linewidth]{paper_suite/figures/fig_noise_topo.pdf}
 \caption{\textbf{NISQ Hardware Realism Sweeps ($p_{\text{depol}} \in [0,0.08]$ and $p_{\text{depol},2\text{q}}=0.015$ CNOT Depth/Topology).}}
 \label{fig:noise_topo}
 \end{figure}
@@ -950,7 +926,7 @@ Disabling \texttt{BatchNorm1d} in \texttt{ConvLatentAE} reveals cross-channel la
 
 \begin{figure}[ht!]
 \centering
-\figslot[0.74\linewidth]{figures/fig_bp_entanglement.pdf}{Two-Panel Multi-Qubit ZZ Entanglement Study.}
+\includegraphics[width=0.74\linewidth]{paper_suite/figures/fig_bp_entanglement.pdf}
 \caption{\textbf{Multi-Qubit $ZZ$ Necessity on Zero-AE Cluster Spin Glass (a) and \texttt{BatchNorm}-Free Fashion-MNIST (b).}}
 \label{fig:bp_entanglement}
 \end{figure}
@@ -1039,7 +1015,7 @@ The remaining probe data ($P=220 \to 544{,}900$ capacity curves, $10\times$-step
 
 \begin{figure}[ht!]
 \centering
-\figslot[0.82\linewidth]{analysis/fig_capacity_vs_diversity.pdf}{Four-Panel Capacity vs.\ Diversity Diagnostic (MNIST, 3 Seeds).}
+\includegraphics[width=0.82\linewidth]{analysis/fig_capacity_vs_diversity.pdf}
 \caption{\textbf{Diagnosis of $\sim 200$-Param Zero Recall Across $P=220 \to 544{,}900$.}}
 \label{fig:capacity_diversity}
 \end{figure}
