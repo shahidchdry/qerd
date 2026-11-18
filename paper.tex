@@ -1,0 +1,1192 @@
+% ==============================================================================
+% Quantum Equilibrium-Response Diffusion (QERD), QER-Grad, & Adam-QER
+% Self-contained LaTeX source (compiles with pdflatex).
+% ==============================================================================
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{xcolor}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{enumitem}
+\usepackage{placeins}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric,fit,backgrounds}
+
+\usepackage[colorlinks=true,citecolor=blue!60!black,linkcolor=blue!60!black,urlcolor=blue!60!black]{hyperref}
+
+% ---- Typography & Float Layout ----
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.50em}
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\bottomfraction}{0.92}
+\renewcommand{\textfraction}{0.06}
+\renewcommand{\floatpagefraction}{0.82}
+\setlength{\textfloatsep}{10pt plus 2pt minus 2pt}
+\setlength{\floatsep}{10pt plus 2pt minus 2pt}
+\setlength{\intextsep}{10pt plus 2pt minus 2pt}
+\makeatletter
+\setlength{\@fptop}{0pt}
+\setlength{\@fpsep}{12pt}
+\setlength{\@fpbot}{0pt plus 1fil}
+\makeatother
+
+\definecolor{qerblue}{HTML}{0072B2}
+\definecolor{qerorange}{HTML}{E69F00}
+\definecolor{qerred}{HTML}{D55E00}
+\definecolor{qergreen}{HTML}{009E73}
+\definecolor{qerpurple}{HTML}{CC79A7}
+\definecolor{slotbg}{HTML}{F7F9FC}
+\definecolor{slotborder}{HTML}{B0C4DE}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{remark}{Remark}
+
+% ---- Formatting Macros ----
+\newcommand{\ph}[1]{\textcolor{blue!55!black}{#1}}
+\providecommand{\qerBenchmarkStatus}{}
+
+% Default standalone table rows (overridden automatically when paper_tables.tex is loaded)
+\providecommand{\qerMainMnistRows}{}
+\providecommand{\qerMainFashionRows}{}
+\providecommand{\qerLitBaselineRows}{}
+\providecommand{\qerAblMnistRows}{}
+\providecommand{\qerAblFashionRows}{}
+\providecommand{\qerShotScalingRows}{}
+\providecommand{\qerTimingRows}{}
+\providecommand{\qerGradAlignRows}{}
+\providecommand{\qerBpScalingRows}{}
+\providecommand{\qerNoiseSweepRows}{}
+\providecommand{\qerTopoDepthRows}{}
+\providecommand{\qerUnwhitenedFashionRows}{}
+\providecommand{\qerPureQpuRows}{}
+
+% Figure auto-loader macro: checks workspace root first, then paper_suite/, else vector box
+\newcommand{\figslot}[3][0.96\linewidth]{%
+  \IfFileExists{#2}{%
+    \includegraphics[width=#1]{#2}%
+  }{%
+    \IfFileExists{paper_suite/#2}{%
+      \includegraphics[width=#1]{paper_suite/#2}%
+    }{%
+      \fcolorbox{slotborder}{slotbg}{%
+        \begin{minipage}[c][3.2cm][c]{0.92\linewidth}
+          \centering
+          \textbf{\small [Figure Slot: \texttt{\detokenize{#2}}]}\\[0.45em]
+          {\footnotesize\color{black!75} #3}\\[0.45em]
+          {\scriptsize\color{qerblue} Missing figure asset.}
+        \end{minipage}%
+      }%
+    }%
+  }%
+}
+
+\IfFileExists{paper_tables.tex}{%
+  \input{paper_tables.tex}%
+}{%
+  \IfFileExists{paper_suite/paper_tables.tex}{\input{paper_suite/paper_tables.tex}}{}%
+}
+
+\begin{document}
+
+% ---- Title Block ----
+\begin{center}
+  \rule{\linewidth}{1.6pt}\\[0.7em]
+  {\LARGE\bfseries Quantum Equilibrium-Response Diffusion:\\
+  $\mathcal{O}(1)$-Circuit Contrastive Optimization for Ising Generative Models on Noisy NISQ Hardware}\\[0.7em]
+  \rule{\linewidth}{0.7pt}\\[0.8em]
+  {\large Mohammad Shahid Chaudhary}\\[0.15em]
+  {\normalsize Independent Researcher}\\
+  {\small\texttt{shahidchaudhary9@protonmail.com}}
+\end{center}
+
+\vspace{0.2em}
+\begin{abstract}
+Training generative models on Noisy Intermediate-Scale Quantum (NISQ) chips is bottlenecked by measurement shot cost more than circuit size or expressivity. Exact Parameter-Shift Rules (PSR) need $2P$ circuits per sample, so an $80\text{k}$-shot budget runs out in only $8$--$22$ steps. Simultaneous Perturbation Stochastic Approximation (SPSA) uses constant circuits per batch, but estimating $P$ weights from one noisy scalar blows up the gradient variance under depolarizing and readout noise. We test Quantum Equilibrium-Response Diffusion (QERD). It trains in $\mathcal{O}(1)$ circuits per sample specifically when trainable weights sit on commuting diagonal Ising terms ($Z_i, Z_u Z_v$) between fixed $R_X$ mixers. Instead of shifting every gate angle, we only shift the visible longitudinal fields by $\pm \beta \mathbf{y}_{\text{target}}$ in $2$ circuits per sample and update all $P$ weights at once from computational-basis measurements. We then use Adam-style second-moment scaling and clipping bounds. Across our $80\text{k}$-shot noisy vision benchmarks ($3.5\%$ depolarizing, $4\%$ readout), PSR and SPSA score $9.2\%$ to $25.9\%$. QERD gets $100.0\%$ on MNIST and $71.8\%$ on Fashion-MNIST, in comparison to noiseless same-circuit exact autodiff at $99.8\%$ to $100.0\%$ and $79.3\%$. When we remove $W_{\text{cond}}$ and autoencoder whitening ($13$--$14$-qubit label qubits, an unwhitened autoencoder, and a $12$-qubit spin glass with no autoencoder), QERD still learns multi-qubit $ZZ$ couplings successfully. Training end-to-end with surrogate backward passes improves accuracy by $7.0$ to $9.4$ percentage points over running a clean-trained model under $24$-shot noise, and by $6.7$ to $63.8$ points over equal-shot field PSR. In our tests, no physical QPU was used; all noisy runs came from GPU statevector trajectory simulation.
+\end{abstract}
+
+% ==============================================================================
+\section{Introduction}
+% ==============================================================================
+Anyone training a generative circuit under a tight shot budget runs into an immediate fork: run out of shots, or drown in variance. Analytic Parameter-Shift Rules (PSR)~\cite{mitarai2018psr,schuld2019psr} require $2P$ shifted queries for each datum. On our $12$-qubit models ($P_{\text{act}} \in [90, 116]$ active parameters at $20$ shots per query), one batch consumes $3{,}600$--$4{,}640$ shots, leaving room for only $8$--$22$ updates in an $80{,}000$-shot budget ($9.2\%$--$14.1\%$ MNIST classification accuracy). Simultaneous Perturbation Stochastic Approximation (SPSA)~\cite{spall1992spsa,kandala2017vqe} drops the query count to two per batch using Rademacher masks $\boldsymbol{\Delta} \in \{\pm 1\}^P$. That solves the query count, at the price of variance growing with $P/c_k^2$; under $3.5\%$ depolarizing noise and $4\%$ readout bit-flips, joint $198$-parameter SPSA stalls at $11.5\%$--$25.9\%$.
+
+In classical neuromorphic hardware, Equilibrium Propagation (EP)~\cite{scellier2017ep,laydevant2024ep} avoids coordinate-wise perturbations by nudging output nodes and reading weight updates from local contrastive differences at fixed points. Moving that idea to gate-based quantum processors is not straightforward. Finite-depth gate circuits do not relax thermally to energy minima, large $R_Z$ angles wrap past $2\pi$ and invert gradient signs, and $\mathbb{Z}_2$ mirror symmetry freezes hidden ancilla qubits at exact zero gradient if weights start at zero.
+
+\paragraph{Approach and Scope.}
+We address these constraints with \textbf{Quantum Equilibrium-Response Diffusion (QERD)}, which decouples $\mathcal{O}(1)$ contrastive gradient estimation from stabilized parameter updates and hybrid differentiation (\S\ref{sec:qer_opt}--\ref{sec:vjp}). The method applies strictly to finite-depth $L$ Ising circuits where trainable weights multiply commuting diagonal terms ($Z_i, Z_u Z_v$) interleaved with fixed $R_X$ mixers. Applying symmetric $\pm\beta$ nudges only on visible qubits cancels even-order curvature around the free field to $\mathcal{O}(\beta^2)$ and yields simultaneous updates for every bias, two-qubit coupler, and conditioning weight in two circuits per sample. We pair this estimator (\texttt{QER-Grad}) with second-moment preconditioning and box bounds (\texttt{StabilizedAdam}), Gaussian symmetry-breaking initialization for hidden ancillas inside a time-pinned \emph{Mold-and-Shake} denoiser, and an $L_\infty$-normalized surrogate backward bridge (\texttt{QERLayer}) for hybrid PyTorch trunks.
+
+\paragraph{Upfront Attribution and Reference Baselines.}
+Our experiments test \textbf{QPU-vs-QPU optimization efficiency} under realistic shot constraints rather than claiming quantum advantage over classical neural networks. Two controls matter for reading the results fairly. First, once the frozen autoencoder applies \texttt{BatchNorm1d} channel whitening ($D=12$, \texttt{bn=True}), classical linear class projections $W_{\text{cond}}\mathbf{c}$ alone (\texttt{theta=0} or \texttt{no-zz}) already hit $100.0\%$ MNIST and $71.1\%$--$71.5\%$ Fashion-MNIST accuracy. Tables~\ref{tab:main_mnist}--\ref{tab:main_fashion} therefore benchmark \textbf{joint $\sim 200$-parameter NISQ co-adaptation} under shot noise, while genuine multi-qubit $ZZ$ learning is isolated in \S\ref{sec:quantum_evidence} by removing $W_{\text{cond}}\mathbf{c}$ ($13$--$14$-qubit label qubits, zero classical weights), turning off \texttt{BatchNorm1d}, and training an autoencoder-free $12$-qubit cluster spin glass. Second, comparing against noiseless \texttt{Exact-AD} references on the identical unitary circuits ($99.8\%$--$100.0\%$ MNIST, $79.2\%$--$79.3\%$ Fashion, $92.2\%$--$94.5\%$ Spin Glass) shows noisy finite-shot QERD tracking within $0.0$--$7.5$ percentage points on vision co-adaptation and reaching $74.8\%$--$80.2\%$ pattern accuracy ($100\%$ mode coverage under \texttt{QER-Res}) on $40\text{k}$-shot spin glass, while equal-shot NISQ optimizers sit at $0.0\%$--$25.9\%$.
+
+% ==============================================================================
+\section{Quantum Equilibrium-Response Diffusion (QERD)}
+% ==============================================================================
+
+\subsection{Diffusion Formulation and Non-Adiabatic Ising Denoiser}
+\label{sec:denoiser}
+Let $\mathbf{x}_0 \in [-1, 1]^D$ denote a discrete $\pm 1$ bit pattern or a $D$-dimensional continuous latent vector coming from a frozen autoencoder. We corrupt $\mathbf{x}_0$ over $T=4$ discrete cosine diffusion steps ($\bar{\alpha}_t \in [0.02, 0.98]$)~\cite{ho2020ddpm} via $\mathbf{x}_t = \operatorname{clip}_{[-1,1]}(\sqrt{\bar{\alpha}_t}\,\mathbf{x}_0 + \sqrt{1 - \bar{\alpha}_t}\,\boldsymbol{\epsilon})$, with $\boldsymbol{\epsilon} \sim \mathcal{N}(0, \sigma_{\text{diff}}^2\mathbf{I})$ ($\sigma_{\text{diff}}=0.70$). Having the circuit predict $\hat{\mathbf{x}}_0 \approx \mathbf{x}_0$ directly maps cleanly to bounded Pauli-$Z$ expectations $\langle Z_i \rangle \in [-1, 1]$. Reverse sampling then steps from $t=T$ down to $1$ via $\mathbf{x}_{t-1} = \operatorname{clip}_{[-1,1]}(\sqrt{\bar{\alpha}_{t-1}}\,\hat{\mathbf{x}}_0 + \sqrt{1 - \bar{\alpha}_{t-1}}\,\sigma_{\text{step}}\boldsymbol{\xi}_t)$, returning $\hat{\mathbf{x}}_0$ on the final step.
+
+Starting in the uniform superposition $|\psi_0\rangle = H^{\otimes n}|0\rangle^{\otimes n}$ over $n = n_{\text{vis}} + n_{\text{hid}}$ qubits, each layer $\ell \in \{1,\dots,L\}$ alternates diagonal Ising rotation (\emph{Mold}) with a fixed transverse pulse (\emph{Shake}) and a per-layer depolarizing channel $\mathcal{E}_{\text{depol}}^{(p_{\text{depol}})}$:
+\begin{equation}
+  U_\ell(\mathbf{h}, \mathbf{J}, \tau) = \mathcal{E}_{\text{depol}}^{(p_{\text{depol}})} \circ \left(\bigotimes_{i=1}^{n} R_X^{(i)}(\theta_\ell^{\text{shake}}(\tau))\right) \circ \exp\!\left[-i\,\frac{g_\ell^{\text{mold}}}{2}\left(\sum_{i=1}^n h_i Z_i + \sum_{(u,v)\in E} J_{uv} Z_u Z_v\right)\right].
+  \label{eq:mold_shake}
+\end{equation}
+Here $\tau = t/T$, the longitudinal gain ramps linearly as $g_\ell^{\text{mold}} = 2\,\Delta t\,\beta_{\text{temp}}(\ell/L)$ ($\Delta t=0.42, \beta_{\text{temp}}=1.25$), and the transverse angle decays along depth while scaling with diffusion time: $\theta_\ell^{\text{shake}}(\tau) = s_{\text{shake}}\cdot 2\Delta t(1 - f_{\text{fin}}\frac{\ell}{L})(0.6 + 0.4\tau)$ ($s_{\text{shake}}=2.2, f_{\text{fin}}=0.70$). Visible fields are pinned toward $\mathbf{x}_t$ via $\lambda(\tau) = 0.28 + 0.52(1-\tau)$. When hidden ancillas are present ($n_{\text{hid}} > 0$), initializing all parameters at $\mathbf{0}$ fixes $\langle Z_h \rangle = 0$ regardless of any $\pm\beta$ perturbation on visible qubits because of exact $\mathbb{Z}_2$ spin-flip symmetry. Drawing $J_{vh} \sim \mathcal{N}(0, 0.08^2)$ and $b_h \sim \mathcal{N}(0, 0.04^2)$ moves hidden units off that saddle before step $1$ (qubit coupling topologies are shown in Appendix~\ref{app:hparams}, Figure~\ref{fig:topologies}).
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    font=\small,
+    box/.style={draw=black!75, rounded corners=4pt, fill=white, align=center, minimum height=0.95cm, inner sep=5pt, thick},
+    qpu/.style={draw=qerblue, rounded corners=5pt, fill=qerblue!6, align=center, inner sep=7pt, very thick},
+    opt/.style={draw=qergreen!80!black, rounded corners=5pt, fill=qergreen!7, align=center, inner sep=7pt, thick},
+    arr/.style={-{Stealth[length=2.4mm]}, thick, color=black!80},
+    darr/.style={-{Stealth[length=2.4mm]}, thick, dashed, color=qerblue}
+]
+\node[qpu, minimum width=10.6cm, minimum height=3.8cm] (qpu_box) at (0,0) {};
+\node[anchor=north, yshift=-0.18cm, font=\bfseries\color{qerblue}] at (qpu_box.north) {Quantum Ising Denoiser ($n_{\text{vis}}+n_{\text{hid}}$ qubits, $L$ layers)};
+\node[box, fill=white, minimum width=2.50cm] (mold) at (-0.15, 0.25) {\textbf{Mold} (Ising)\\$R_Z(h_i g_\ell)$, $R_{ZZ}(J_{uv} g_\ell)$};
+\node[box, fill=white, left=0.45cm of mold, minimum width=1.75cm] (init) {$H^{\otimes n}|0\rangle^n$};
+\node[box, fill=white, right=0.45cm of mold, minimum width=2.25cm] (shake) {\textbf{Shake} (+ Faults)\\$R_X(\theta_\ell(\tau))$};
+\node[below=0.45cm of mold, font=\scriptsize\color{black!80}] {Repeated $\ell=1,\dots,L \longrightarrow$ Computational-Basis Readout ($p_{\text{ro}}$ bit-flip)};
+\node[box, fill=gray!6, anchor=east, minimum width=4.0cm] (inp) at ($(qpu_box.west)+(-0.85, 0.72)$) {State $\mathbf{x}_t \in [-1,1]^D$, $\tau$, $\mathbf{c}$};
+\node[box, below=0.50cm of inp.south east, anchor=north east, fill=qerorange!10, draw=qerorange!80!black, minimum width=4.3cm] (nudge) {\textbf{Contrastive Nudges}\\$\mathbf{h}_{\text{vis}}^{(\pm)} = \mathbf{h}_{\text{free}} \pm \beta \mathbf{y}_{\text{target}}$};
+\node[box, anchor=west, fill=qerpurple!10, draw=qerpurple!80!black, minimum width=3.1cm] (obs_p) at ($(qpu_box.east)+(0.95, 0.72)$) {$+\beta$: $\langle Z_i\rangle_+,\ \langle Z_u Z_v\rangle_+$};
+\node[box, below=0.48cm of obs_p, fill=qerred!8, draw=qerred!80!black, minimum width=3.1cm] (obs_m) {$-\beta$: $\langle Z_i\rangle_-,\ \langle Z_u Z_v\rangle_-$};
+\node[opt, below=0.82cm of qpu_box, minimum width=10.6cm] (qeropt) {%
+  \textbf{\texttt{QER-Grad} ($\mathcal{O}(1)$ Contrastive Estimator) $+$ \texttt{StabilizedAdam} ($\beta_2$-Normalized Preconditioner)}\\
+  $\hat{g}_{b_i} = \frac{\langle Z_i\rangle_+ - \langle Z_i\rangle_-}{2\beta},\quad \hat{g}_{J_{uv}} = \frac{\langle Z_u Z_v\rangle_+ - \langle Z_u Z_v\rangle_-}{2\beta},\quad \hat{g}_{W_{\text{cond}}} = \hat{\mathbf{g}}_{b_{\text{vis}}}\mathbf{c}^\top$
+};
+\draw[arr] (inp.east) -- ++(0.40,0) |- (init.west);
+\draw[arr] (nudge.east) -- ++(0.40,0) |- ([yshift=-0.22cm]mold.south) -- (mold.south);
+\draw[arr] (init) -- (mold); \draw[arr] (mold) -- (shake);
+\coordinate (branch) at ($ (qpu_box.east)+(0.45,0) $);
+\draw[darr] (shake.east) -- (branch |- shake.east) |- (obs_p.west);
+\draw[darr] (shake.east) -- (branch |- shake.east) |- (obs_m.west);
+\draw[arr] (obs_m.south) |- ([yshift=0.18cm]qeropt.east);
+\draw[arr] (obs_p.east) -- ++(0.40,0) |- ([yshift=-0.18cm]qeropt.east);
+\draw[arr, color=qergreen!75!black, very thick] (qeropt.north) -- node[right=4pt, font=\scriptsize] {Clipped Cosine Adam update: $\theta=(J,b),\, W_{\text{cond}}$} (qpu_box.south);
+\end{tikzpicture}
+}
+\caption{\textbf{QERD Architecture and $\mathcal{O}(1)$ Contrastive Feedback Loop.} Symmetric visible-field perturbations $\pm \beta \mathbf{y}_{\text{target}}$ yield dense updates for all $J_{uv}$, $b_i$, and $W_{\text{cond}}$ in two circuit configurations per datum.}
+\label{fig:arch}
+\end{figure}
+
+\subsection{Contrastive Field Probing (\texttt{QER-Grad}) and Optimization}
+\label{sec:qer_opt}
+Collect the QPU biases and couplers into $\boldsymbol{\theta}=(\mathbf{J},\mathbf{b}) \in \mathbb{R}^{|E|+n}$, paired with the diagonal observables $\mathcal{O}_k \in \{Z_u Z_v, Z_i\}$, alongside optional classical conditioning weights $W_{\text{cond}} \in \mathbb{R}^{n_{\text{vis}}\times K}$. For a target $\mathbf{y}_{\text{target}} \in \mathbb{R}^{n_{\text{vis}}}$, \texttt{QER-Grad} evaluates just two visible-field configurations per sample:
+\begin{equation}
+  \mathbf{h}_{\text{vis}}^{(\pm)}(\mathbf{x}_t,\tau,\mathbf{c}) = \mathbf{b}_{\text{vis}} + \lambda(\tau)\mathbf{x}_t + W_{\text{cond}}\mathbf{c} \pm \beta\,\mathbf{y}_{\text{target}},
+  \label{eq:contrastive_fields}
+\end{equation}
+while $\mathbf{J}$ and any hidden biases $\mathbf{b}_{\text{hid}}$ stay unchanged. Measuring computational-basis bitstrings over $M$ samples ($K_{\text{s}}$ shots per sign) gives empirical expectations $\hat{\boldsymbol{\mu}}^{(\pm)}$ and visible spins $\hat{\mathbf{z}}_{\text{vis}}^{(\pm)}$, updating every parameter simultaneously:
+\begin{equation}
+  \hat{\mathbf{g}}_\theta = \frac{1}{M}\sum_{m=1}^M \frac{\hat{\boldsymbol{\mu}}_m^{(+)} - \hat{\boldsymbol{\mu}}_m^{(-)}}{2\beta}, \qquad
+  \hat{\mathbf{g}}_{W_{\text{cond}}} = \frac{1}{M}\sum_{m=1}^M \left(\frac{\hat{\mathbf{z}}_{\text{vis},m}^{(+)} - \hat{\mathbf{z}}_{\text{vis},m}^{(-)}}{2\beta}\right)\mathbf{c}_m^\top.
+  \label{eq:qer_grads}
+\end{equation}
+
+\begin{proposition}[$\mathcal{O}(1)$ Cost, $\mathcal{O}(\beta^2)$ Bias Cancellation, and Contrastive Surrogate]
+\label{prop:centered_bias}
+Let $\boldsymbol{\mu}(\mathbf{h}_{\text{vis}})$ denote the noise-averaged observable vector of Eq.~\eqref{eq:mold_shake} on $[-B_c, B_c]^P$. First, subtracting symmetric $\pm\beta$ expectations cancels the unperturbed baseline $\boldsymbol{\mu}(\mathbf{h}_{\text{free}})$ and all even-order derivatives (including quadratic $R_Z$ curvature) identically for any depth $L\ge 1$, estimating $\langle \nabla_{\mathbf{h}_{\text{vis}}}\boldsymbol{\mu}, \mathbf{y}_{\text{target}}\rangle$ to $\mathcal{O}(\beta^2)$ bias using $2$ circuit configurations per sample ($\mathcal{O}(1)$ in $P$). Second, because $[g_\ell^{\text{mold}} H_{\text{diag}}, \theta_\ell^{\text{shake}} H_X] = \mathcal{O}(\Delta t^2) \neq 0$, Eq.~\eqref{eq:qer_grads} does \textbf{not} equal the exact MSE gradient $-\nabla_\theta\mathcal{L}_{\text{MSE}} = \nabla_\theta\mathbb{E}[\mathbf{x}_0^\top\mathbf{z}_{\text{vis}}] - \frac{1}{2}\nabla_\theta\mathbb{E}[\|\mathbf{z}_{\text{vis}}\|^2]$. Target nudging ($\mathbf{y}_{\text{target}}=\mathbf{x}_0$) acts as a local-response surrogate ascending $\mathbb{E}[\mathbf{x}_0^\top\mathbf{z}_{\text{vis}}]$, whereas residual nudging ($\mathbf{y}_{\text{target}}=\mathbf{x}_0 - \mathbf{z}_{\text{free}}$, $3$ circuits per sample, denoted \texttt{QER-Res}) eliminates the missing $-\frac{1}{2}\nabla_\theta\|\mathbf{z}\|^2$ term. (See Appendix~\ref{app:proofs}.)
+\end{proposition}
+
+\paragraph{Scope of the 2-Circuit Trick.}
+\texttt{QER-Grad} is restricted to parameters multiplying commuting diagonal operators ($Z_i, Z_u Z_v$) with fixed $R_X$ mixers. It cannot differentiate arbitrary parameterized $R_X(\theta)$ or $R_Y(\theta)$ gates inside generic hardware-efficient ansatzes. In diffusion training, Option-A target nudging ($\mathbf{y}_{\text{target}}=\mathbf{x}_0$) keeps evaluation at $2$ circuits per sample and helps counteract depolarizing shrinkage toward $0$.
+
+\paragraph{Physics-Adapted Stepping (\texttt{StabilizedAdam}).}
+Gradient magnitudes differ sharply between $W_{\text{cond}}$, single-qubit biases $b_i$, and two-qubit couplers $J_{uv}$, so plain SGD stalls unless step sizes are retuned per parameter group. Dividing by the second moment $\sqrt{\hat{\mathbf{v}}_t}$ ($\beta_2=0.98$) removes those scale differences automatically. In our ablations (\S\ref{sec:mech_opt}), dropping momentum ($\beta_1=0$, \texttt{RMSprop-Only}) still hits $96.6\%$--$99.6\%$ MNIST accuracy at $\mathrm{lr}\in[0.06,0.12]$, while removing $\beta_2$ scaling (\texttt{Momentum-Only}) drops to $37.8\%$--$87.1\%$ at $\mathrm{lr}\le 0.12$ and catches up ($99.5\%$) only when raised fourfold to $\mathrm{lr}=0.50$. We combine Adam ($\beta_1=0.75, \beta_2=0.98$, Algorithm~\ref{alg:qer_step}) with cosine LR annealing ($\alpha_{\max}\to\alpha_{\min}$), LR-coupled weight decay $(1 - \eta_w\alpha_s/\alpha_{\max})$, and box bounds $[-B_c, B_c]$ to keep gate phases away from $2\pi$ wraparound. As a simple guard against over-large nudges, \texttt{QER-Grad} can track $a_{\text{nudge}} = \operatorname{mean}((\hat{\mathbf{z}}^{(+)} - \hat{\mathbf{z}}^{(-)}) \odot \mathbf{y}_{\text{target}})$ and shrink $\beta \leftarrow \max(\beta_{\min}, 0.75\beta)$ after two negative steps (\texttt{auto\_beta\_guard}; inactive at the default $\beta_0=0.45$).
+
+\begin{algorithm}[t]
+\caption{\texttt{Adam-QER}: Decoupled Contrastive Field Probing + \texttt{StabilizedAdam} Step}
+\label{alg:qer_step}
+\begin{algorithmic}[1]
+\small
+\REQUIRE Parameters $\mathcal{P}=\{\boldsymbol{\theta}, W_{\text{cond}}\}$, minibatch $(\mathbf{x}_t, \tau, \mathbf{c}, \mathbf{y}_{\text{target}})$, progress $p \in [0,1]$, radius $\beta$, bounds $[-B_c, B_c]$.
+\STATE Evaluate QPU expectations at $+\beta$ and $-\beta$ field nudges (Eq.~\eqref{eq:contrastive_fields}): $(\hat{\boldsymbol{\mu}}_m^{(\pm)}, \hat{\mathbf{z}}_m^{(\pm)})$.
+\STATE Compute $\hat{\mathbf{g}}_\theta, \hat{\mathbf{g}}_{W_{\text{cond}}}$ via Eq.~\eqref{eq:qer_grads}; (optional guard: shrink $\beta$ if $a_{\text{nudge}} < 0$ twice).
+\STATE Set $\alpha_p \leftarrow \alpha_{\min} + \frac{1}{2}(\alpha_{\max}-\alpha_{\min})(1+\cos(\pi p))$ and $\gamma_p \leftarrow 1 - \eta_w(\alpha_p/\alpha_{\max})$.
+\STATE Update Adam moments $(\mathbf{m}, \mathbf{v})$ and clip in-place: $P \leftarrow \operatorname{clip}_{[-B_c, B_c]}(\gamma_p P + \alpha_p \hat{\mathbf{m}}/(\sqrt{\hat{\mathbf{v}}}+\epsilon))$.
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Readout Calibration and Hybrid Surrogate VJP Bridge (\texttt{QERLayer})}
+\label{sec:vjp}
+Depolarizing faults pull measured spin expectations toward $0$. From the free-phase midpoint $\mathbf{z}_{\text{mid}} = \frac{1}{2}(\hat{\mathbf{z}}^{(+)}+\hat{\mathbf{z}}^{(-)})$, online forward OLS regression ($\mathbf{z}\sim g\mathbf{x}_0$, dividing $\mathbf{z}_{\text{raw}}$ by $\hat{g}_t^{\text{fwd}}$) sharpens discrete binary outputs, while inverse predictive OLS ($\mathbf{x}_0\sim a\mathbf{z}$) avoids overshooting under heavy noise:
+
+\begin{proposition}[Idealized Linear-Attenuation Regression-Dilution Dichotomy]
+\label{prop:dilution}
+Write clean targets as $\mathbf{x}_0 = \boldsymbol{\mu}_t(\mathbf{x}_t) + \boldsymbol{\delta}_t$ with conditional mean $\boldsymbol{\mu}_t = \mathbb{E}[\mathbf{x}_0 \mid \mathbf{x}_t]$ ($\mathbb{E}[\boldsymbol{\mu}_t\odot\boldsymbol{\delta}_t]=\mathbf{0}$). Under the \emph{idealized assumption} of linear uniform attenuation plus independent shot noise $\mathbf{z}_{\text{mid}} = \gamma\boldsymbol{\mu}_t + \boldsymbol{\eta}_s$ ($\sigma_s^2 = \mathbb{E}[\eta_s^2]$) and vanishing prior weight $w_0 \to 0$, forward OLS converges to $g_t^{\text{fwd},*} = \gamma R_t^2 < \gamma$ (with $R_t^2 = \mathbb{E}[\boldsymbol{\mu}_t^2]/\mathbb{E}[\mathbf{x}_0^2] \ll 1$ at high noise, pushing outputs by $R_t^{-2}$ toward $\{\pm 1\}^D$), whereas inverse OLS approaches $a_t^* = \gamma\mathbb{E}[\boldsymbol{\mu}_t^2]/(\gamma^2\mathbb{E}[\boldsymbol{\mu}_t^2] + \sigma_s^2) \xrightarrow{\sigma_s^2\to 0} \gamma^{-1}$, avoiding $R_t^{-2}$ overshoot. These idealized assumptions omit nonlinear finite-$L$ dynamics and nonzero EMA weighting, so we verify them numerically in Appendix~\ref{app:proofs} and~\ref{app:mnist_abl}.
+\end{proposition}
+On whitened continuous latents, leaving Option A uncalibrated ($g_0=1.0, \text{EMA}=0.0$) avoids extra variance altogether. For end-to-end classical-quantum networks, \texttt{QERLayer} wraps the denoiser as a PyTorch custom autograd layer using $L_\infty$-normalized upstream gradients:
+
+\begin{proposition}[Scale-Invariant Reciprocity-Based Surrogate VJP]
+\label{prop:vjp}
+Given upstream gradient $\mathbf{g}_{\text{out},m} = \nabla_{\mathbf{z}_{\text{vis},m}}\mathcal{L}$ with $s_m = \|\mathbf{g}_{\text{out},m}\|_\infty + 10^{-8}$ and $\tilde{\mathbf{u}}_m = \mathbf{g}_{\text{out},m}/s_m$, querying $\pm\beta\tilde{\mathbf{u}}_m$ forms a scale-invariant surrogate backward pass in $2$ circuit runs per sample:
+\begin{equation}
+  \widehat{\nabla}_{\boldsymbol{\theta}}\mathcal{L} = \sum_{m=1}^M \frac{s_m}{2\beta}(\hat{\boldsymbol{\mu}}_m^{(+)}-\hat{\boldsymbol{\mu}}_m^{(-)}),\qquad
+  \widehat{\nabla}_{\mathbf{h}_m}\mathcal{L} = \frac{s_m}{2\beta}(\hat{\mathbf{z}}_{\text{vis},m}^{(+)}-\hat{\mathbf{z}}_{\text{vis},m}^{(-)}),\qquad
+  \widehat{\nabla}_{\mathbf{x}_{t,m}}\mathcal{L} = \lambda(\tau_m)\,\widehat{\nabla}_{\mathbf{h}_m}\mathcal{L}.
+\end{equation}
+This rule acts as an empirically validated surrogate rather than a general replacement for exact quantum backpropagation. It matches exact transpose VJPs only in the idealized $\beta\to 0$ reciprocal limit; on finite-depth non-commuting Ising circuits, visible-field sensitivities align closely ($\cos(\text{JVP},\text{VJP})_h \ge 0.990$), while two-qubit $ZZ$ alignment attenuates as weights grow—reaching $+0.426$ on $L=2$ MNIST and $+0.296$ on $L=4$ Spin Glass at $\beta=0.45$, and dropping to $+0.059$ NISQ ($-0.044$ Clean) at $\beta=0.10$ (\S\ref{sec:mech_opt}).
+\end{proposition}
+
+% ==============================================================================
+\section{Experimental Protocol and Benchmarks}
+\label{sec:setup}
+% ==============================================================================
+
+\subsection{Benchmark Tasks and Qubit Allocation}
+Our benchmarks are grouped into two parts (Table~\ref{tab:benchmark_tasks}). The first evaluates how well coupled classical-quantum parameters train together under noisy shot limits on continuous vision latents. For MNIST~\cite{lecun1998mnist} and Fashion-MNIST~\cite{xiao2017fashion}, a frozen \texttt{ConvLatentAE} ($861{,}421$ parameters) maps $28\times 28$ images into $D=12$ bounded coordinates in $[-1,1]^{12}$. The second removes classical linear shortcuts cleanly: we drop $W_{\text{cond}}\mathbf{c}$ on $13$--$14$-qubit label-qubit circuits, disable \texttt{BatchNorm1d} whitening in the autoencoder, and test an autoencoder-free $12$-qubit cluster spin glass whose eight stride-$3$ $\pm 1$ ground modes have zero single-bit magnetization ($\mathbb{E}[x_i]=0$). Finally, we attach no-skip residual MLP trunks ($h\in\{48,128\}$) to \texttt{QERLayer} to examine end-to-end hybrid training.
+
+\begin{table}[t!]
+\centering
+\caption{\textbf{Overview of Benchmark Tasks and Circuit Configurations.} Unless noted, NISQ runs apply $p_{\text{depol}}=0.035$ per Trotter layer and $p_{\text{readout}}=0.04$ bit-flip readout errors. Trainable parameter counts combine Ising weights $\boldsymbol{\theta}=(\mathbf{J},\mathbf{b})$ and classical conditioning/trunk weights where present.}
+\label{tab:benchmark_tasks}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Benchmark Task} & \textbf{Qubits ($n_{\text{vis}}+n_{\text{hid}}$)} & \textbf{Depth $L$} & \textbf{Trainable Params $P$} & \textbf{Shot Budget} & \textbf{Primary Role} \\
+\midrule
+MNIST Latent Diffusion (\texttt{bn=True}) & $12 + 0$ & $2$ & $198$ ($78$ QPU + $120$ $W_{\text{cond}}$) & $80\text{k}$ ($10\text{k}$--$160\text{k}$) & Joint NISQ co-adaptation \\
+Fashion-MNIST Latent Diffusion (\texttt{bn=True}) & $12 + 2$ & $2$ & $224$ ($104$ QPU + $120$ $W_{\text{cond}}$) & $80\text{k}$ & Ancilla symmetry breaking \\
+Zero-$W_{\text{cond}}$ Label Qubits ($\{0,1\}$ / $\{0,1,4\}$) & $13$--$14$ ($12+1$ / $12+2$) & $3$ & $91$ / $105$ ($0$ classical) & $80\text{k}$ & Pure quantum $ZZ$ routing \\
+Unwhitened Fashion Diffusion (\texttt{bn=False}) & $12 + 2$ & $2$ & $224$ vs.\ $158$ (\texttt{no-zz}) & $80\text{k}$ & Cross-channel $ZZ$ coupling \\
+Zero-AE $12$q Cluster Spin Glass ($\mathbf{c}=\mathbf{0}$) & $12 + 0$ & $2, 4$ & $78$ ($66$ $ZZ$ + $12$ biases) & $40\text{k}$ & Multi-mode $ZZ$ generation \\
+Hybrid ResMLP + \texttt{QERLayer} (No Skip) & $12 + 0$ & $2$ & $6{,}618$ / $37{,}978$ & $1.38\text{M}$ ($24$/call) & Hardware-in-the-loop VJP \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\subsection{Noise Channel, Baselines, and Simulation Protocol}
+All quantum circuits run inside a vectorized GPU Monte Carlo statevector simulator ($4$ shots per depolarized trajectory). One $80\text{k}$-shot seed takes on average $13.32\,\text{s}$ on $12$-qubit MNIST and $56.82\,\text{s}$ on $14$-qubit Fashion-MNIST (Appendix~\ref{app:runtime}). Unless noted in our two-qubit stress sweeps (Appendix~\ref{app:hw_spin}, adding CNOT noise $p_{\text{depol},2\text{q}}=0.015$), each layer applies synthetic Pauli depolarizing noise ($p_{\text{depol}}=0.035$) followed by computational-basis readout bit-flips ($p_{\text{readout}}=0.04$). Standard diffusion runs train for $200$ batches of $M=10$ samples at $400$ shots per batch and evaluate $N=2{,}000$ generated samples at $\sigma_{\text{step}}=0.70$.
+
+Every baseline shares the exact same shot budget and synthetic noise channel: \texttt{Adam-SPSA}~\cite{spall1992spsa}, \texttt{Adaptive-SPSA}, $3{\times}3$ tuned and Chain-Rule SPSA, \texttt{QN-SPSA-CR}~\cite{gacon2021qnspsa}, \texttt{Adam-PSR-FD}, \texttt{Exact-PSR}~\cite{schuld2019psr}, \texttt{iCANS}~\cite{kubler2020icans}, \texttt{Rosalin}~\cite{arrasmith2020rosalin}, \texttt{PQC-QuDDPM}~\cite{zhang2024quddpm}, and \texttt{QCBM-MMD}~\cite{rudolph2022ionqgan}. To tell finite-shot optimization errors apart from circuit-capacity limits, we also run \textbf{Same-Circuit Noiseless \texttt{Exact-AD}} baselines (exact PyTorch backpropagation through the identical noiseless Ising circuit) alongside parameter-matched classical networks (\texttt{ClassicalIsing-EP}, $\sim 200$-parameter \texttt{Classical-DDPM}/\texttt{-Skip}, and a $38{,}020$-parameter \texttt{Classical-Large} ResMLP). Exact grid searches and hyperparameters are given in Appendix~\ref{app:hparams}.
+
+\subsection{Evaluation Metrics}
+On MNIST and Fashion-MNIST ($N=2{,}000$ samples), we score generations with an independent frozen \texttt{EvalCNN} classifier ($98.86\%$ MNIST / $91.47\%$ Fashion real test accuracy) to compute conditional accuracy (\texttt{ClfAcc}) and Fr\'echet distances~\cite{heusel2017fid} in both $12$-D latent space (\texttt{LatFID}, \texttt{CondLatFID}) and $64$-D \texttt{EvalCNN} features (\texttt{FeatFID}, \texttt{CondFeatFID}). Diversity is tracked via intra-class latent spread (\texttt{LatStd}) and $5$-NN PRDC precision, recall, and coverage (\texttt{Prec}, \texttt{Rec}, \texttt{Cov})~\cite{naeem2020prdc}. On the discrete $12$-qubit cluster spin glass, we measure intra-cluster $ZZ$ correlation (\texttt{Intra-Cluster Corr}), exact match rate against the $8$ ground modes (\texttt{Pattern Acc}), correlation matrix RMSE, and distinct modes visited (\texttt{Mode Cov}).
+
+% ==============================================================================
+\section{Experimental Results and Quantum Attribution}
+\label{sec:main_results}
+% ==============================================================================
+
+\subsection{Joint NISQ Co-Adaptation on Continuous Vision Latents}
+Across $80\text{k}$ noisy shots ($3.5\%$ depolarizing, $4\%$ readout), standard parameter-shift and SPSA optimizers fail to stabilize joint vision training on both datasets (Tables~\ref{tab:main_mnist}--\ref{tab:main_fashion}, Figure~\ref{fig:samples_grid}; full literature tables in Appendix~\ref{app:ext_opt}). PSR and SPSA baselines sit between $9.2\%$ and $16.5\%$ held-out accuracy on MNIST and $9.9\%$--$13.8\%$ on Fashion-MNIST, producing mostly noise. \texttt{Adam-QER}, by contrast, learns quickly even at tight budgets (Figure~\ref{fig:shot_scaling}): MNIST accuracy reaches $84.1\%$ after $10\text{k}$ shots ($25$ steps), $98.6\%$ at $20\text{k}$ shots, and $\mathbf{100.0 \pm 0.0\%}$ at $80\text{k}$ shots ($\text{FeatFID}=185.4$, $\text{Prec}=0.996$). On $14$-qubit Fashion-MNIST, accuracy reaches $\mathbf{71.8 \pm 3.2\%}$ ($\text{FeatFID}=147.8$, $\text{Prec}=0.998$).
+
+Comparing QERD against \textbf{Same-Circuit Noiseless \texttt{Exact-AD}} isolates how much error comes from shots and noise rather than circuit size. Noisy QERD matches clean autodiff accuracy on MNIST ($100.0\%$ vs.\ $99.8\%$--$100.0\%$, though \texttt{FeatFID} sits $46.7$--$61.1$ higher due to shot variance and target-nudge contraction) and stays within $7.5$ percentage points on Fashion-MNIST MSE ($71.8\%$ vs.\ $79.2\%$--$79.3\%$), while hitting $79.2\%$ with forward OLS calibration and keeping precision higher ($0.998$ vs.\ $0.861$, Appendix~\ref{app:mnist_abl}). Both quantum and classical $\sim 200$-parameter denoisers show essentially zero $5$-NN Recall ($\text{Rec}\approx 0.000$--$0.006$). Capacity sweeps from $P=220$ up to $545\text{k}$ parameters (Appendix~\ref{app:capacity}, Figure~\ref{fig:capacity_diversity}) trace that collapse directly to parameter count: a $200$-parameter denoiser averages modes under MSE, and Recall begins rising only once networks grow to $6\text{k}$--$141\text{k}+$ weights.
+
+\paragraph{What Whitened-AE Benchmarks Do and Do Not Show.}
+Six-row ablations (Appendix~\ref{app:mnist_abl}, Tables~\ref{tab:abl_mnist}--\ref{tab:abl_fashion}) show an important caveat. Once \texttt{ConvLatentAE} applies \texttt{BatchNorm1d} channel whitening, cutting all two-qubit couplings (\texttt{no-zz}: $100.0\%$ MNIST / $71.1\%$ Fashion) or zeroing QPU parameters completely (\texttt{wcond-only}: $100.0\%$ / $71.5\%$; class-centroid lookup: $100.0\%$) gives virtually identical class accuracy. So Tables~\ref{tab:main_mnist}--\ref{tab:main_fashion} should be read as a test of \textbf{joint $198$--$224$-parameter co-adaptation} under shot noise (where SPSA at $16.5\%$ and Chain-Rule/QN-SPSA/PSR at $10.2\%$--$25.9\%$ in Appendix~\ref{app:ext_opt} fail to coordinate $W_{\text{cond}}$ and $\boldsymbol{\theta}$ together), rather than evidence of two-qubit entanglement doing the classification work. Section~\ref{sec:quantum_evidence} removes $W_{\text{cond}}\mathbf{c}$ and whitening to test $ZZ$ learning directly.
+
+\begin{table}[t!]
+\centering
+\caption{\textbf{MNIST ($12+0$ Qubits, $80\text{k}$ Shot Budget, $N=2{,}000$, $\sigma_{\text{step}}=0.70$).} Top block: $5$-seed noisy NISQ QPU baselines ($p_{\text{depol}}=0.035, p_{\text{readout}}=0.04$) and $5$-seed noiseless classical references. Bottom block: $3$-seed same-circuit noiseless \texttt{Exact-AD} controls.}
+\label{tab:main_mnist}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccccccc@{}}
+\toprule
+\textbf{Method} & \textbf{Params} & \textbf{ClfAcc (\%) $\uparrow$} & \textbf{CondLatFID $\downarrow$} & \textbf{LatFID $\downarrow$} & \textbf{CondFeatFID $\downarrow$} & \textbf{FeatFID $\downarrow$} & \textbf{Prec $\uparrow$} & \textbf{Rec $\uparrow$} & \textbf{LatStd} \\
+\midrule
+\qerMainMnistRows
+\midrule
+\multicolumn{10}{l}{\textit{Same-Circuit Noiseless Exact-AD Reference (Identical $12+0$q Unitary Ansatz, $3$ Seeds)}} \\
+\midrule
+Exact-AD ($200$ st, MSE, $B_c{=}0.9$) & 198 & $99.8 \pm 0.2\%$ & $1.36 \pm 0.02$ & $0.93 \pm 0.08$ & $245.4 \pm 5.9$ & $138.7 \pm 9.5$ & $0.996 \pm 0.001$ & $0.004 \pm 0.002$ & $0.145 \pm 0.004$ \\
+Exact-AD ($600$ st, bs=$32$, MSE) & 198 & $100.0 \pm 0.0\%$ & $1.29 \pm 0.01$ & $0.78 \pm 0.02$ & $234.6 \pm 3.2$ & $124.3 \pm 4.7$ & $0.993 \pm 0.002$ & $0.006 \pm 0.001$ & $0.146 \pm 0.001$ \\
+Exact-AD ($200$ st, Surrogate) & 198 & $91.2 \pm 1.3\%$ & $3.92 \pm 0.08$ & $1.70 \pm 0.04$ & $463.7 \pm 4.5$ & $211.8 \pm 2.1$ & $1.000 \pm 0.000$ & $0.000 \pm 0.000$ & $0.052 \pm 0.002$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[t!]
+\centering
+\caption{\textbf{Fashion-MNIST ($12+2$ Ancilla Qubits, $80\text{k}$ Shot Budget, $N=2{,}000$, $\sigma_{\text{step}}=0.70$).} Top block: $5$-seed noisy NISQ QPU baselines and $5$-seed noiseless classical references. Bottom block: $3$-seed same-circuit noiseless \texttt{Exact-AD} controls.}
+\label{tab:main_fashion}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccccccc@{}}
+\toprule
+\textbf{Method} & \textbf{Params} & \textbf{ClfAcc (\%) $\uparrow$} & \textbf{CondLatFID $\downarrow$} & \textbf{LatFID $\downarrow$} & \textbf{CondFeatFID $\downarrow$} & \textbf{FeatFID $\downarrow$} & \textbf{Prec $\uparrow$} & \textbf{Rec $\uparrow$} & \textbf{LatStd} \\
+\midrule
+\qerMainFashionRows
+\midrule
+\multicolumn{10}{l}{\textit{Same-Circuit Noiseless Exact-AD Reference (Identical $12+2$q Unitary Ansatz, $3$ Seeds)}} \\
+\midrule
+Exact-AD ($200$ st, MSE, $B_c{=}0.9$) & 224 & $79.3 \pm 1.2\%$ & $1.40 \pm 0.03$ & $0.68 \pm 0.02$ & $248.9 \pm 9.4$ & $184.6 \pm 10.2$ & $0.861 \pm 0.012$ & $0.002 \pm 0.000$ & $0.139 \pm 0.003$ \\
+Exact-AD ($600$ st, bs=$32$, MSE) & 224 & $79.2 \pm 1.0\%$ & $1.37 \pm 0.01$ & $0.68 \pm 0.02$ & $243.7 \pm 4.0$ & $178.3 \pm 2.0$ & $0.865 \pm 0.006$ & $0.002 \pm 0.001$ & $0.132 \pm 0.003$ \\
+Exact-AD ($200$ st, Surrogate) & 224 & $85.6 \pm 3.7\%$ & $3.66 \pm 0.03$ & $1.52 \pm 0.10$ & $247.8 \pm 8.4$ & $115.7 \pm 7.7$ & $0.987 \pm 0.012$ & $0.000 \pm 0.000$ & $0.049 \pm 0.001$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{figure}[t!]
+\centering
+\figslot[0.80\linewidth]{figures/fig_shot_scaling.pdf}{Shot-Budget Scaling Curves ($10\text{k} \to 160\text{k}$ shots on MNIST).}
+\caption{\textbf{Shot-Budget Scaling ($10\text{k} \to 160\text{k}$ Shots on MNIST, $3$ Seeds).} QER reaches $84.1\%$ at $10\text{k}$ shots ($25$ steps), $98.6\%$ at $20\text{k}$ shots ($50$ steps), and $100.0\%$ at $80\text{k}$ shots, whereas equal-shot \texttt{Adam-SPSA} remains stalled at $12.0\%$--$18.2\%$.}
+\label{fig:shot_scaling}
+\end{figure}
+
+\begin{figure}[t!]
+\centering
+\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_mnist_qerd.png}{MNIST QER}\caption{QER -- MNIST}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_mnist_psr.png}{MNIST PSR}\caption{PSR -- MNIST}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_mnist_spsa.png}{MNIST SPSA}\caption{SPSA -- MNIST}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_mnist_ddpm.png}{MNIST DDPM}\caption{DDPM -- MNIST}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_mnist_real.png}{MNIST Real}\caption{Real -- MNIST}\end{subfigure}\\[0.40em]
+\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_fashion_qerd.png}{Fashion QER}\caption{QER -- Fashion}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_fashion_psr.png}{Fashion PSR}\caption{PSR -- Fashion}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_fashion_spsa.png}{Fashion SPSA}\caption{SPSA -- Fashion}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_fashion_ddpm.png}{Fashion DDPM}\caption{DDPM -- Fashion}\end{subfigure}\hfill
+\begin{subfigure}[b]{0.188\textwidth}\figslot[\linewidth]{figures/sample_fashion_real.png}{Fashion Real}\caption{Real -- Fashion}\end{subfigure}
+\caption{\textbf{Generated Mode Synthesis Grids ($8$ samples/class, rows $0$--$9$, seed $0$, $80\text{k}$ NISQ Shots).} QERD yields legible class-conditional generations comparable to noiseless \texttt{DDPM}, whereas equal-shot \texttt{PSR} and \texttt{SPSA} collapse to noise.}
+\label{fig:samples_grid}
+\end{figure}
+
+\subsection{Multi-Qubit \texorpdfstring{$ZZ$}{ZZ} Learning Without Classical Shortcuts}
+\label{sec:quantum_evidence}
+Once linear shortcuts are removed, three benchmarks isolate genuine multi-qubit $ZZ$ learning directly on noisy circuits (Table~\ref{tab:quantum_attribution}, Figure~\ref{fig:spinglass_diagnosis}; full factorial tables appear in Appendix~\ref{app:hw_spin}).
+
+When $W_{\text{cond}}\mathbf{c}$ is deleted completely and class labels are applied solely as $\pm 1$ target fields on one or two ancilla qubits ($0$ classical weights, depth $L=3$), conditioning information can reach the visible register only through inter-qubit $ZZ$ gates. Uncoupled \texttt{no-zz} circuits stay at coin-flip chance ($49.9\%$ for $2$-class $\{0,1\}$ on $13$q; $33.1\%$ for $3$-class $\{0,1,4\}$ on $14$q), and equal-shot $13$q baselines fail as well (\texttt{SPSA}: $50.0\%$; \texttt{iCANS-PSR}: $49.6\%$). Noisy $80\text{k}$-shot QERD reaches $\mathbf{99.3 \pm 0.2\%}$ on $13$q $\{0,1\}$ (almost matching noiseless \texttt{Exact-AD} at $100.0\%$) and $71.0 \pm 16.0\%$ on the harder $14$q $3$-class split, where clean \texttt{Exact-AD} hits $100.0\%$ and finite-shot noise adds variance across the $91$ couplers. On Fashion-MNIST with \texttt{BatchNorm1d} removed (\texttt{bn=False}), cross-channel correlations stay raw across qubits, and full $ZZ$ QERD improves over \texttt{no-zz} in \texttt{CondLatFID} ($1.79$ vs.\ $2.28$), \texttt{LatFID} ($0.85$ vs.\ $1.19$), and \texttt{FeatFID} ($99.3$ vs.\ $113.5$).
+
+The cleanest pure-quantum test is the autoencoder-free $12$-qubit cluster spin glass ($\mathbf{c}=\mathbf{0}$, $40\text{k}$ shots), whose eight stride-$3$ patterns have zero average magnetization. Local or uncoupled topologies (\texttt{no-zz}, \texttt{chain}, \texttt{grid4}) cannot express stride-$3$ entanglement ($-0.008$ to $0.000$ correlation), while equal-shot \texttt{SPSA} and \texttt{PSR} stall at $0.0\%$--$11.9\%$ exact pattern accuracy. Raising depth to $L=4$ with \texttt{FwdOLS} calibration lets $3$-run \texttt{QER-Res} achieve $\mathbf{+0.688 \pm 0.076}$ correlation, $\mathbf{100.0 \pm 0.0\%}$ mode coverage, and $74.8 \pm 4.3\%$ pattern accuracy; $2$-circuit \texttt{Adam-QER} gets $80.2 \pm 9.1\%$ accuracy ($87.5\%$ coverage) under NISQ noise and $89.3 \pm 0.9\%$ ($100.0\%$ coverage) under $40\text{k}$ clean shots. Measured against matched noiseless \texttt{Exact-AD} (\texttt{MSE+FwdOLS+rand08+Cosine}: $+0.888$--$+0.940$ corr, $92.2\%$--$94.5\%$ pattern accuracy), noisy $40\text{k}$-shot QERD recovers full $8$-mode coverage and $74.8\%$--$80.2\%$ raw pattern accuracy (roughly four-fifths to seven-eighths of the clean autodiff ceiling under simulated gate and readout faults).
+
+\begin{table}[t!]
+\centering
+\caption{\textbf{Zero-Classical-Shortcut Quantum Attribution ($3$ Seeds, NISQ $3.5\%/4\%$ Unless Marked Clean).} Removing $W_{\text{cond}}\mathbf{c}$ ($13$--$14$q label qubits \& $12$q zero-AE spin glass) or disabling \texttt{BatchNorm1d} establishes $ZZ$ learning directly on noisy circuits relative to matched \texttt{Exact-AD} and \texttt{ClassicalIsing-EP} references.}
+\label{tab:quantum_attribution}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llccccc@{}}
+\toprule
+\textbf{Benchmark} & \textbf{Method / Variant} & \textbf{Params} & \textbf{Primary Acc $\uparrow$} & \textbf{Structure / FID} & \textbf{Cov / 10-Way} & \textbf{RMSE / Prec} \\
+\midrule
+\multirow{3}{*}{\shortstack[l]{Zero-$W_{\text{cond}}$ $13$q $\{0,1\}$\\($L=3, 80\text{k}$ sh)}} & \texttt{no-zz} / Tuned SPSA / \texttt{iCANS-PSR} & $13$--$91$ & $49.9$ / $50.0$ / $49.6\%$ & -- & $2.4 / 0.0 / 0.0\%$ & -- \\
+ & \textbf{\texttt{Adam-QER all} (NISQ)} & $91$ & $\mathbf{99.3 \pm 0.2\%}$ & -- & $2.9 \pm 2.1\%$ & -- \\
+ & \textit{Ref: Same-Circuit \texttt{Exact-AD} (Clean)} & $91$ & $100.0\%$ & -- & $98.2\%$ {\scriptsize(10-way)} & -- \\
+\midrule
+\multirow{3}{*}{\shortstack[l]{Zero-$W_{\text{cond}}$ $14$q $\{0,1,4\}$\\($L=3, 80\text{k}$ sh)}} & \texttt{QER no-zz} (NISQ) & $14$ & $33.1 \pm 1.8\%$ & -- & $23.3\%$ {\scriptsize(10-way)} & -- \\
+ & \textbf{\texttt{Adam-QER all} (NISQ)} & $105$ & $\mathbf{71.0 \pm 16.0\%}$ & -- & $59.3 \pm 9.6\%$ & -- \\
+ & \textit{Ref: Same-Circuit \texttt{Exact-AD} (Clean)} & $105$ & $100.0\%$ & -- & $96.7\%$ {\scriptsize(10-way)} & -- \\
+\midrule
+\multirow{2}{*}{\shortstack[l]{Unwhitened Fashion\\(\texttt{bn=False}, $80\text{k}$ sh)}} & \texttt{QER no-zz} ($12+2$q, NISQ) & $158$ & $71.7 \pm 0.9\%$ & $\text{CondLatFID}=2.28$ & $\text{FeatFID}=113.5$ & $\text{Prec}=0.982$ \\
+ & \textbf{\texttt{Adam-QER Full} ($ZZ$, NISQ)} & $224$ & $73.1 \pm 3.1\%$ & $\mathbf{1.79 \pm 0.07}$ & $\mathbf{99.3 \pm 4.4}$ & $\mathbf{0.994}$ \\
+\midrule
+\multirow{7}{*}{\shortstack[l]{Zero-AE $12$q Cluster\\Spin Glass ($40\text{k}$ sh)}} & \texttt{QER no-zz} ($L{=}4$, FwdOLS, NISQ) & $12$ & $1.4 \pm 0.5\%$ & $\text{Corr}=+0.001$ & $\text{ModeCov}=16.7\%$ & $\text{RMSE}=0.524$ \\
+ & \texttt{SPSA-Surr} ($L{=}4$, FwdOLS, NISQ) & $78$ & $11.9 \pm 13.2\%$ & $\text{Corr}=+0.030$ & $\text{ModeCov}=8.3\%$ & $\text{RMSE}=0.515$ \\
+ & \textbf{\texttt{QER-Res} (Exact MSE, $L{=}4$, NISQ)} & $78$ & $74.8 \pm 4.3\%$ & $+0.688 \pm 0.076$ & $\mathbf{100.0 \pm 0.0\%}$ & $0.205$ \\
+ & \textbf{\texttt{Adam-QER} (Surr, $L{=}4$, NISQ / Clean)} & $78$ & $80.2$ / $89.3\%$ & $+0.569$ / $+0.687$ & $87.5$ / $\mathbf{100.0\%}$ & $0.266$ / $0.207$ \\
+ & \textit{Ref: \texttt{Exact-AD} (MSE+FwdOLS+rand08+Cos200/400)} & $78$ & $93.9$ / $92.2\%$ & $+0.888$ / $+0.940$ & $100.0$ / $100.0\%$ & $0.108$ / $0.101$ \\
+ & \textit{Ref: \texttt{Exact-AD} ($B_c{=}0.90$, MSE+FwdOLS+rand08+Cos200)} & $78$ & $94.5 \pm 1.2\%$ & $+0.890 \pm 0.051$ & $100.0 \pm 0.0\%$ & $0.112$ \\
+ & \textit{Ref: \texttt{ClassicalIsing-EP} (Float64 Attr.)} & $78$ & $100.0 \pm 0.0\%$ & $+0.939 \pm 0.066$ & $75.0 \pm 35.4\%$ & $0.357$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{figure}[t!]
+\centering
+\figslot[0.83\linewidth]{analysis/fig_spinglass_diagnosis.pdf}{Four-Panel 3-Seed Spin-Glass Factorial Attribution.}
+\caption{\textbf{Controlled $3$-Seed Spin-Glass Attribution ($40\text{k}$ Shots).} Sparse/unentangled topologies (\texttt{no-zz}, \texttt{chain}, \texttt{grid4}) and equal-shot \texttt{SPSA}/\texttt{PSR} remain near zero correlation, whereas depth $L=4$ with \texttt{FwdOLS} and residual nudging (\texttt{QER-Res}) achieves $100.0\%$ mode coverage and recovers $80\%$--$95\%$ of matched clean \texttt{Exact-AD} accuracy.}
+\label{fig:spinglass_diagnosis}
+\end{figure}
+
+% ==============================================================================
+\section{Mechanism Analysis, Preconditioning, and Hybrid Adaptation}
+\label{sec:mech_opt}
+% ==============================================================================
+
+\subsection{Microscopic Reciprocity and Contrastive Gradient Fidelity}
+\paragraph{Reciprocity Audit Across Clean and NISQ Trajectories.}
+We checked Proposition~\ref{prop:vjp}'s reciprocity assumption directly on random draws and converged checkpoints for both $L=2$ MNIST ($\max|\theta|: 0.63 \to 0.27$) and $L=4$ Spin Glass ($\max|\theta|: 0.86 \to 0.53$) in Table~\ref{tab:reciprocity}. Depolarizing and readout errors barely perturb directional alignment on single-qubit fields: on $L=2$ MNIST, NISQ Jacobian asymmetry stays inside $[0.056, 0.127]$ ($\cos(\text{JVP},\text{VJP})_h \ge 0.993$), while $\cos(\text{QER},\text{VJP})_{ZZ}$ stays positive throughout ($+0.994 \to +0.426$). On $L=4$ Spin Glass, asymmetry grows to $0.127$--$0.160$ ($\cos_h \ge 0.991$), and $ZZ$ cosine settles to $[0.296, 0.575]$ at $\beta=0.45$. Lowering the perturbation radius to $\beta=0.10$ at late step $t=125$ drops $ZZ$ alignment to $+0.059$ NISQ ($-0.044$ Clean).
+
+\paragraph{Contrastive Surrogate vs.\ Exact MSE (\texttt{QER-Res}) and Shot SNR.}
+Decomposing the updates step by step (Appendix~\ref{app:grad_bp}, Figure~\ref{fig:grad_fidelity_proof}) clarifies why $2$-circuit target nudging turns negative on $ZZ$ MSE cosines mid-training: dropping $-\frac{1}{2}\nabla_\theta\|\mathbf{z}\|^2$ leaves the pure correlation ascent direction $\nabla_\theta\mathbb{E}[\mathbf{x}_0^\top\mathbf{z}]$. Switching to $3$-circuit residual nudging ($\mathbf{y}_{\text{target}}=\mathbf{x}_0-\mathbf{z}_{\text{free}}$, \texttt{QER-Res}) restores positive MSE cosines at every step ($+0.289$--$+0.994$). Under unit-consistent sum normalization from $n=6$ to $14$ qubits ($L=2$, $4\text{k}$ shots), \texttt{QER-Grad} maintains $+0.885\to +0.827$ Surrogate and $+0.867\to +0.766$ Residual-MSE cosine SNR, finishing at $+0.500$--$+0.736$ on converged weights compared to $\le +0.132$ for \texttt{Exact-PSR} and \texttt{SPSA}.
+
+\begin{table}[t!]
+\centering
+\caption{\textbf{Microscopic Non-Equilibrium Reciprocity ($12$q) Across Random Draws and Trained Checkpoints.} Formats Clean / NISQ ($3.5\%$ depol + $4\%$ readout) at operational $\beta=0.45$ (at $\beta=0.10$, late converged $L=4$ $t=125$ drops to $-0.044 / +0.059$ on $ZZ$). Right column: converged $4\text{k}$-shot SNR ($3$-run \texttt{QER-Res} vs.\ \texttt{Exact-PSR} / \texttt{SPSA}).}
+\label{tab:reciprocity}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Regime / Checkpoint} & \textbf{Asym.\ Ratio} & $\cos(\text{JVP},\text{VJP})_h$ & $\cos(\text{QER},\text{VJP})_h$ & $\cos(\text{QER},\text{VJP})_{ZZ}$ ($\beta{=}0.45$) & \textbf{Converged $4\text{k}$-sh SNR} \\
+\midrule
+Random $L=2$: \texttt{rand\_0.2} / \texttt{rand\_0.6} (Clean) & $0.009$ / $0.059$ & $+1.000$ / $+0.998$ & $+1.000$ / $+0.997$ & $+0.952$ / $+0.758$ & $+0.855$ vs.\ $+0.099$ / $+0.038$ \\
+Random $L=4$: \texttt{rand\_0.2} / \texttt{rand\_0.6} (Clean) & $0.037$ / $0.158$ & $+0.999$ / $+0.991$ & $+0.999$ / $+0.993$ & $+0.971$ / $+0.886$ & -- \\
+\midrule
+Trained MNIST $L=2$: $t=50$ ($\max|\theta|{=}0.63$) & $0.131$ / $0.127$ & $+0.993$ / $+0.993$ & $+0.994$ / $+0.994$ & $+0.762$ / $+0.763$ & \multirow{2}{*}{$t=200$: $\mathbf{+0.736}$ vs.\ $+0.067$ / $+0.056$} \\
+Trained MNIST $L=2$: $t=200$ ($\max|\theta|{=}0.27$) & $0.058$ / $0.056$ & $+0.997$ / $+0.997$ & $+0.998$ / $+0.997$ & $+0.418$ / $+0.426$ & \\
+\midrule
+Trained SpinGlass $L=4$: $t=60$ ($\max|\theta|{=}0.86$) & $0.158$ / $0.160$ & $+0.996$ / $+0.991$ & $+0.996$ / $+0.991$ & $+0.572$ / $+0.575$ & \multirow{2}{*}{$t=125$: $\mathbf{+0.500}$ ($\mathbf{+0.591}$ Res) vs.\ $-0.004$ / $+0.061$} \\
+Trained SpinGlass $L=4$: $t=125$ ($\max|\theta|{=}0.53$) & $0.124$ / $0.127$ & $+0.997$ / $+0.995$ & $+0.991$ / $+0.991$ & $+0.205$ / $+0.296$ & \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{figure}[t!]
+\centering
+\figslot[0.83\linewidth]{analysis/fig_grad_fidelity_proof.pdf}{Four-Panel 3-Seed Gradient Fidelity Validation.}
+\caption{\textbf{$3$-Seed Surrogate vs.\ MSE Decomposition, Residual Nudge Verification (\texttt{QER-Res}), and Batch-Window Shot SNR (MNIST).} Target nudging ($\mathbf{x}_0$) tracks $\nabla_\theta\mathbb{E}[\mathbf{x}_0^\top\mathbf{z}]$ ($+0.378$--$+0.995$ on $ZZ$), while residual nudging ($\mathbf{x}_0-\mathbf{z}_{\text{free}}$) keeps MSE cosines strictly positive ($+0.289$--$+0.994$) and sustains high NISQ SNR across batch windows.}
+\label{fig:grad_fidelity_proof}
+\end{figure}
+
+\subsection{Second-Moment Preconditioning and Wraparound Stability}
+Isolating individual pieces of \texttt{StabilizedAdam} (Appendix~\ref{app:ext_opt}, Table~\ref{tab:adam_cal_controls}) shows why second-moment normalization matters more here than momentum. Stripping Adam scaling at default $\mathrm{lr}=0.12$ drops MNIST accuracy from $97.2\%$ to $86.8\%$ and doubles \texttt{FeatFID} ($173.1 \to 391.6$). Keeping only $\beta_2=0.98$ (\texttt{RMSprop-Only}, $\beta_1=0$) recovers $96.6\%$ at $\mathrm{lr}=0.12$ and $99.6\%$ at $\mathrm{lr}=0.06$, whereas unnormalized \texttt{Momentum-Only} ($\beta_2=0$) hits only $37.8\%$--$87.1\%$ at $\mathrm{lr}\le 0.12$ and catches up ($99.5\%$, $\text{FeatFID}=154.2$) only once boosted fourfold to $\mathrm{lr}=0.50$. Dropping cosine LR decay multiplies \texttt{FeatFID} spread by $20\times$ ($1.4 \to 27.5$). The optional \texttt{auto\_beta\_guard} never triggers at the default $\beta_0=0.45$, but rescues badly over-driven $\beta_0=11.0$ runs by shrinking $\beta \to 6.19$ and lifting accuracy from $0.7\%$ to $93.9\%$.
+
+\subsection{End-to-End Hybrid Adaptation via \texttt{QERLayer}}
+We also tested no-skip residual MLP trunks ($h\in\{48,128\}$) wired directly through a $12$-qubit NISQ \texttt{QERLayer} ($1.38\text{M}$ training shots, $24$ shots per inference step; Table~\ref{tab:hybrid_summary}, Figure~\ref{fig:hybrid_qpu_diversity}, full $P=220\to 545\text{k}$ curves in Appendix~\ref{app:capacity}). Taking a trunk trained cleanly with exact autodiff and deploying it unadapted onto $24$-shot noisy hardware lifts Recall ($0.067\text{--}0.081 \to 0.403\text{--}0.437$ at $\sigma=0.85$) simply via measurement jitter, but drops accuracy by $7.0$--$9.4$ points and worsens \texttt{FeatFID} by $+48.7$ to $+71.7$ relative to end-to-end \texttt{QERLayer} adaptation across all four $(h,\sigma_{\text{step}})$ pairs. Giving exact layered PSR the same $1.38\text{M}$-shot budget across the $12$ input fields alone (leaving $\boldsymbol{\theta}$ frozen) leaves it either step-starved ($24$ shots/shift, $18$ steps: $35.4\% / 25.9\%$) or shot-starved ($4$ shots/shift, $100$ steps: $88.8\% / 76.1\%$), trailing \texttt{QERLayer} by $6.7$--$13.6$ points in accuracy and $36.0$--$49.8$ in \texttt{FeatFID}.
+
+One control keeps this result honest: classical Binomial noise-dose baselines ($24\to 4$ shots, zero quantum gates) match or beat \texttt{QERLayer} Recall and \texttt{FeatFID} once noise variance aligns ($6$-shot \texttt{ClNoise}: $89.3\%$--$89.6\%$ accuracy, $\text{Rec}=0.540$--$0.593$, $\text{FeatFID}=70.4$). What boosts diversity is SNR-matched stochasticity, not a special quantum prior; \texttt{QERLayer}'s contribution is making end-to-end training under that hardware noise fast and stable.
+
+\begin{table}[t!]
+\centering
+\caption{\textbf{Hybrid No-Skip Scaling Summary ($3$ Seeds, MNIST $D=12$, $N=2{,}000$, $1.38\text{M}$ QPU Shots Where Shot-Based).} Relative to unadapted \texttt{ExactAD-NISQ24}, end-to-end \texttt{QERLayer} gains $+7.0$ to $+9.4\text{ pp}$ Acc and improves \texttt{FeatFID} by $-48.7$ to $-71.7$; $6$-shot classical Binomial noise confirms shot noise drives diversity.}
+\label{tab:hybrid_summary}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{Model / Control} & \textbf{Training / Inference Rule} & \textbf{Shots/Sh} & \textbf{ClfAcc (\%) $\uparrow$} & \textbf{FeatFID $\downarrow$} & \textbf{Prec $\uparrow$} & \textbf{Rec $\uparrow$} \\
+\midrule
+\texttt{ExactAD-h48 / h128} ($\sigma{=}0.85$, Clean Eval) & Clean Exact-AD / Clean Eval & $\infty$ / $\infty$ & $99.8$ / $99.7$ & $94.8$ / $96.9$ & $0.996$ / $0.996$ & $0.067$ / $0.081$ \\
+\texttt{ExactAD-h48} (NISQ24 Eval, $\sigma{=}0.35 / 0.85$) & Clean train $\to$ $24$sh NISQ eval & $\infty$ / $24$ & $88.5$ / $81.4$ & $120.7$ / $151.7$ & $0.960$ / $0.942$ & $0.308$ / $0.403$ \\
+\texttt{ExactAD-h128} (NISQ24 Eval, $\sigma{=}0.35 / 0.85$) & Clean train $\to$ $24$sh NISQ eval & $\infty$ / $24$ & $84.7$ / $79.5$ & $153.4$ / $161.7$ & $0.954$ / $0.940$ & $0.350$ / $0.437$ \\
+\texttt{HybridPSR-h48} ($18$ st, $\sigma{=}0.35 / 0.85$) & PSR on $12$ fields ($1.35\text{M}$ sh) & $24$ / $24$ & $35.4$ / $25.9$ & $315.1$ / $275.7$ & $0.904$ / $0.888$ & $0.360$ / $0.485$ \\
+\texttt{HybridPSR-h48} ($100$ st, $\sigma{=}0.35 / 0.85$) & PSR on $12$ fields ($1.38\text{M}$ sh) & $4$ / $24$ & $88.8$ / $76.1$ & $108.0$ / $139.3$ & $0.955$ / $0.925$ & $0.320$ / $0.431$ \\
+\texttt{ClassicalResMLP+6shNoise-h48 / h128} ($\sigma{=}0.85$) & Classical $6$-shot Binomial & $6$ / $6$ & $89.6$ / $89.3$ & $\mathbf{70.4}$ / $\mathbf{70.4}$ & $0.953$ / $0.951$ & $\mathbf{0.540}$ / $\mathbf{0.593}$ \\
+\midrule
+\textbf{\texttt{HybridQER-h48}} ($\sigma{=}0.35 / 0.85$) & \texttt{QERLayer} VJP ($1.38\text{M}$ sh) & $24$ / $24$ & $\mathbf{95.5}$ / $\mathbf{89.7}$ & $\mathbf{72.0}$ / $89.5$ & $0.976$ / $0.961$ & $0.326$ / $0.428$ \\
+\textbf{\texttt{HybridQER-h128}} ($\sigma{=}0.35 / 0.85$) & \texttt{QERLayer} VJP ($1.38\text{M}$ sh) & $24$ / $24$ & $\mathbf{94.1}$ / $\mathbf{88.7}$ & $81.7$ / $94.6$ & $0.972$ / $0.954$ & $0.353$ / $0.476$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{figure}[t!]
+\centering
+\figslot[0.83\linewidth]{analysis/fig_hybrid_qpu_diversity.pdf}{Two-Panel Hybrid QERLayer Scaling Across 24 NISQ Shots.}
+\caption{\textbf{End-to-End Hybrid Scaling via \texttt{QERLayer} ($3$ Seeds, $N=2{,}000$).} Hardware-in-the-loop surrogate differentiation avoids the $7.0$--$9.4\text{ pp}$ accuracy drop and $+48.7$ to $+71.7$ \texttt{FeatFID} degradation suffered by unadapted clean-trained \texttt{ExactAD} under $24$-shot NISQ deployment, while matched $6$-shot classical noise confirms stochastic regularization drives diversity.}
+\label{fig:hybrid_qpu_diversity}
+\end{figure}
+
+\FloatBarrier
+% ==============================================================================
+\section{Related Work, Limitations, and Conclusion}
+% ==============================================================================
+
+\paragraph{Related Work.}
+Standard parameter-shift estimators~\cite{mitarai2018psr,schuld2019psr} and adaptive shot-allocation rules (\texttt{iCANS}~\cite{kubler2020icans}, \texttt{Rosalin}~\cite{arrasmith2020rosalin}) evaluate parameters one by one. SPSA~\cite{spall1992spsa,kandala2017vqe} and Quantum Natural SPSA (\texttt{QN-SPSA})~\cite{gacon2021qnspsa} use constant circuits per update, at the cost of variance scaling with $P$. QERD operates in the shallow regime where barren plateaus stay mild~\cite{mcclean2018bp,cerezo2021bp} and avoids $2P$ sweeps on diagonal Ising terms. Unlike classical Equilibrium Propagation~\cite{scellier2017ep,laydevant2024ep} and thermal Quantum Boltzmann Machines~\cite{amin2018qbm}, it applies centered perturbations to finite-depth non-adiabatic Trotter circuits~\cite{farhi2014qaoa}, addressing the shot bottleneck faced by earlier quantum diffusion and Born models~\cite{zhang2024quddpm,huang2021qgan,rudolph2022ionqgan}.
+
+\paragraph{Limitations.}
+Several boundaries restrict what can be concluded here. No physical quantum processor was run; all NISQ measurements come from GPU trajectory simulation using synthetic Pauli depolarizing and bit-flip readout noise, leaving out $T_1/T_2$ decay, crosstalk, coherent over-rotation, and hardware compiler routing overhead. Methodologically, the $2$-circuit rule holds strictly for commuting diagonal $Z_i, Z_u Z_v$ weights paired with fixed $R_X$ mixers, and returns a correlation surrogate rather than exact MSE gradients unless paired with $3$-run \texttt{QER-Res}. Inside \texttt{QERLayer}, reciprocity stays high on visible biases ($\cos_h \ge 0.990$) but weakens on two-qubit $ZZ$ weights later in training ($+0.426$ at $L=2$ MNIST; $+0.296$ at $L=4$ Spin Glass with $\beta=0.45$, falling to $+0.059$ NISQ and $-0.044$ Clean at $\beta=0.10$), so \texttt{QERLayer} acts as a useful hardware-in-the-loop surrogate rather than a substitute for exact backprop. Finally, the vision benchmarks compress $28\times 28$ images with a frozen $861\text{k}$-parameter autoencoder where \texttt{BatchNorm1d} makes linear class shortcuts trivial, continuous $\sim 200$-parameter denoisers give near-zero Recall ($\approx 0.0$), and hybrid Recall improvements come from matched shot noise rather than a quantum generative edge.
+
+\paragraph{Conclusion.}
+Restricting circuits to commuting diagonal Ising operators with fixed mixers lets QERD harvest simultaneous updates for all couplings and fields from two circuit evaluations per sample. Across $40\text{k}$--$80\text{k}$ simulated NISQ shots, this avoids both PSR's step starvation and SPSA's coordinate-variance collapse on $12$--$14$-qubit vision co-adaptation, $13$--$14$-qubit zero-$W_{\text{cond}}$ routing, $12$-qubit cluster spin glasses, and hybrid \texttt{QERLayer} training, tracking within $0$--$7.5$ percentage points of noiseless exact autodiff on vision accuracy and covering all eight ground modes on spin glass.
+
+\paragraph{AI Assistance Disclosure.}
+Large Language Model (LLM) assistants were used during this project to draft and copyedit English prose, format LaTeX tables and figures, and assist with code modularization, Qiskit Runtime batching implementation, and unit-test scaffolding. The human author directed the research questions, simulator experiments, and negative controls, cross-checked reported metrics against saved experimental outputs, verified library behavior via automated tests, and reviewed every derivation, citation, and stated limitation. No unverified experimental numbers or references are included, and the author takes full responsibility for the entire manuscript.
+
+% ==============================================================================
+% Bibliography
+% ==============================================================================
+\begin{thebibliography}{99}
+\small
+\bibitem{amin2018qbm} M.~H. Amin, E.~Andriyash, J.~Rolfe, B.~Kulchytskyy, and R.~Melko. Quantum Boltzmann machine. {\em Physical Review X}, 8(2):021050, 2018.
+\bibitem{arrasmith2020rosalin} A.~Arrasmith, L.~Cincio, R.~D. Somma, and P.~J. Coles. Operator sampling for shot-frugal optimization in variational algorithms. {\em arXiv:2004.06252}, 2020.
+\bibitem{cerezo2021bp} M.~Cerezo, A.~Sone, T.~Volkoff, L.~Cincio, and P.~J. Coles. Cost function dependent barren plateaus in shallow parametrized quantum circuits. {\em Nature Communications}, 12:1791, 2021.
+\bibitem{farhi2014qaoa} E.~Farhi, J.~Goldstone, and S.~Gutmann. A quantum approximate optimization algorithm. {\em arXiv:1411.4028}, 2014.
+\bibitem{gacon2021qnspsa} J.~Gacon, C.~Zoufal, G.~Carleo, and S.~Woerner. Simultaneous perturbation stochastic approximation of the quantum Fisher information. {\em Quantum}, 5:567, 2021.
+\bibitem{heusel2017fid} M.~Heusel et~al. GANs trained by a two time-scale update rule converge to a local Nash equilibrium. {\em NeurIPS}, 2017.
+\bibitem{ho2020ddpm} J.~Ho, A.~Jain, and P.~Abbeel. Denoising diffusion probabilistic models. {\em NeurIPS}, 2020.
+\bibitem{huang2021qgan} H.-L. Huang et~al. Experimental quantum generative adversarial networks for image generation. {\em Physical Review Applied}, 16(2):024051, 2021.
+\bibitem{kandala2017vqe} A.~Kandala et~al. Hardware-efficient variational quantum eigensolver for small molecules and quantum magnets. {\em Nature}, 549:242--246, 2017.
+\bibitem{kingma2015adam} D.~P. Kingma and J.~Ba. Adam: A method for stochastic optimization. {\em ICLR}, 2015.
+\bibitem{kubler2020icans} J.~M. K{\"u}bler, A.~Arrasmith, L.~Cincio, and P.~J. Coles. An adaptive optimizer for measurement-frugal variational algorithms. {\em Quantum}, 4:263, 2020.
+\bibitem{laydevant2024ep} J.~Laydevant, D.~Markovic, and J.~Grollier. Training an Ising machine with equilibrium propagation. {\em Nature Communications}, 15:3671, 2024.
+\bibitem{lecun1998mnist} Y.~LeCun, L.~Bottou, Y.~Bengio, and P.~Haffner. Gradient-based learning applied to document recognition. {\em Proc.\ IEEE}, 86(11):2278--2324, 1998.
+\bibitem{mcclean2018bp} J.~R. McClean et~al. Barren plateaus in quantum neural network training landscapes. {\em Nature Communications}, 9:4812, 2018.
+\bibitem{mitarai2018psr} K.~Mitarai, M.~Negoro, M.~Kitagawa, and K.~Fujii. Quantum circuit learning. {\em Physical Review A}, 98(3):032309, 2018.
+\bibitem{naeem2020prdc} M.~F. Naeem, S.~J. Oh, Y.~Uh, Y.~Choi, and J.~Yoo. Reliable fidelity and diversity metrics for generative models. {\em ICML}, 2020.
+\bibitem{rudolph2022ionqgan} M.~S. Rudolph et~al. Generation of high-resolution handwritten digits with an ion-trap quantum computer. {\em Physical Review X}, 12(3):031010, 2022.
+\bibitem{scellier2017ep} B.~Scellier and Y.~Bengio. Equilibrium propagation: Bridging the gap between energy-based models and backpropagation. {\em Frontiers Comput.\ Neurosci.}, 11:24, 2017.
+\bibitem{schuld2019psr} M.~Schuld, V.~Bergholm, C.~Gogolin, J.~Izaac, and N.~Killoran. Evaluating analytic gradients on quantum hardware. {\em Physical Review A}, 99(3):032331, 2019.
+\bibitem{sohldickstein2015} J.~Sohl-Dickstein, E.~Weiss, N.~Maheswaranathan, and S.~Ganguli. Deep unsupervised learning using nonequilibrium thermodynamics. {\em ICML}, 2015.
+\bibitem{spall1992spsa} J.~C. Spall. Multivariate stochastic approximation using a simultaneous perturbation gradient approximation. {\em IEEE Trans.\ Autom.\ Control}, 37(3):332--341, 1992.
+\bibitem{xiao2017fashion} H.~Xiao, K.~Rasul, and R.~Vollgraf. Fashion-MNIST: a novel image dataset for benchmarking machine learning algorithms. {\em arXiv:1708.07747}, 2017.
+\bibitem{zhang2024quddpm} B.~Zhang, P.~Xu, X.~Chen, and Q.~Zhuang. Generative quantum machine learning via denoising diffusion probabilistic models. {\em Physical Review Letters}, 132(10):100602, 2024.
+\end{thebibliography}
+
+% ==============================================================================
+% Appendices
+% ==============================================================================
+\clearpage
+\appendix
+
+\section{Theoretical Derivations (Propositions~\ref{prop:centered_bias}--\ref{prop:vjp})}
+\label{app:proofs}
+
+\subsection{Centered \texorpdfstring{$\mathcal{O}(\beta^2)$}{O(beta\textasciicircum 2)} Bias Cancellation and Contrastive Surrogate}
+Write $O_k(\mathbf{h}) = \mathbb{E}_{\text{faults}}[\langle \psi_\ell(\boldsymbol{\theta}, \mathbf{h}) | \mathcal{O}_k | \psi_\ell(\boldsymbol{\theta}, \mathbf{h}) \rangle]$ for the noise-averaged expectation treated as a smooth bounded observable of visible fields $\mathbf{h}_{\text{vis}} = \mathbf{h}_{\text{free}} + \Delta\mathbf{h}$. Expanding to third order around $\mathbf{h}_{\text{free}}$ at symmetric nudges $\Delta\mathbf{h} = \pm \beta \mathbf{y}$ ($\|\mathbf{y}\|_\infty \le 1$) gives:
+\begin{equation}
+  O_k(\mathbf{h}_{\text{free}} \pm \beta\mathbf{y}) = O_k(\mathbf{h}_{\text{free}}) \pm \beta \langle \nabla_{\mathbf{h}} O_k, \mathbf{y} \rangle + \frac{\beta^2}{2}\mathbf{y}^\top (\nabla_{\mathbf{h}}^2 O_k)\mathbf{y} \pm \frac{\beta^3}{6} D^3_{\mathbf{y}} O_k + \mathcal{O}(\beta^4).
+\end{equation}
+Subtracting the $-\beta$ query from $+\beta$ and dividing by $2\beta$ cancels both $O_k(\mathbf{h}_{\text{free}})$ and the quadratic curvature $\frac{\beta^2}{2}\mathbf{y}^\top (\nabla_{\mathbf{h}}^2 O_k)\mathbf{y}$ identically for any finite depth $L$ and depolarizing channel, leaving $\langle \nabla_{\mathbf{h}} O_k, \mathbf{y} \rangle + \mathcal{O}(\beta^2)$ in two circuit evaluations per sample independent of $P$. Alternating $H_{\text{diag}}$ and $H_X$ introduces nonzero commutators $[g_\ell^{\text{mold}} H_{\text{diag}}, \theta_\ell^{\text{shake}} H_X] = \mathcal{O}(\Delta t^2)$, which is why Eq.~\eqref{eq:qer_grads} follows $\nabla_\theta \mathbb{E}[\mathbf{y}_{\text{target}}^\top \mathbf{z}_{\text{vis}}]$ rather than exact $-\nabla_\theta \mathcal{L}_{\text{MSE}} = \nabla_\theta\mathbb{E}[\mathbf{x}_0^\top\mathbf{z}_{\text{vis}}] - \frac{1}{2}\nabla_\theta\mathbb{E}[\|\mathbf{z}_{\text{vis}}\|^2]$; nudging with the residual $(\mathbf{x}_0 - \mathbf{z}_{\text{free}})$ restores positive alignment with exact MSE across training (Appendix~\ref{app:grad_bp}). \qed
+
+\subsection{Idealized Regression-Dilution Analysis (Proposition~\ref{prop:dilution})}
+Assuming linear uniform attenuation $\mathbf{z}_{\text{mid}} = \gamma\boldsymbol{\mu}_t + \boldsymbol{\eta}_s$ on targets $\mathbf{x}_0 = \boldsymbol{\mu}_t(\mathbf{x}_t) + \boldsymbol{\delta}_t$ ($\mathbb{E}[\boldsymbol{\mu}_t\odot\boldsymbol{\delta}_t]=\mathbf{0}$), forward OLS regression ($\mathbf{z}_{\text{mid}} \sim g\mathbf{x}_0$) approaches as prior weight $w_0 \to 0$:
+\begin{equation}
+  g_t^{\text{fwd},*} = \frac{\mathbb{E}[(\gamma \boldsymbol{\mu}_t + \boldsymbol{\eta}_s) \odot (\boldsymbol{\mu}_t + \boldsymbol{\delta}_t)]}{\mathbb{E}[\mathbf{x}_0^2]} = \gamma\,\frac{\mathbb{E}[\boldsymbol{\mu}_t^2]}{\mathbb{E}[\boldsymbol{\mu}_t^2] + \mathbb{E}[\boldsymbol{\delta}_t^2]} = \gamma\,R_t^2 < \gamma.
+\end{equation}
+At heavy diffusion noise ($R_T^2 \ll 1$), dividing $\mathbf{z}_{\text{raw}}$ by $g_t^{\text{fwd},*}$ scales outputs by $R_t^{-2} \gg 1$ toward $\{\pm 1\}^D$ corners. Regressing in the predictive direction ($\mathbf{x}_0 \sim a_t\mathbf{z}_{\text{mid}}$) minimizes $\mathbb{E}[(a_t\mathbf{z}_{\text{mid}} - \mathbf{x}_0)^2]$ directly and gives $a_t^* = 1/g_t^{\text{inv},*} = \gamma\mathbb{E}[\boldsymbol{\mu}_t^2]/(\gamma^2\mathbb{E}[\boldsymbol{\mu}_t^2]+\sigma_s^2) \xrightarrow{\sigma_s^2\to 0} \gamma^{-1}$. Because finite-depth circuits are nonlinear and update with $\text{EMA}=0.10$, we check this effect numerically in Table~\ref{tab:adam_cal_controls}: \texttt{fwd\_ols} clips at the $0.20$ floor on $7.42\%$ of steps ($\text{CondLatFID}=6.33$), whereas \texttt{inv\_ols} clips $0.00\%$ on $[0.2, 2.0]$ ($\text{CondLatFID}=2.31$, gains $0.54$--$0.79$). \qed
+
+\subsection{Scale-Invariant Surrogate VJP Scope (Proposition~\ref{prop:vjp})}
+Normalizing $\tilde{\mathbf{u}}_m = \mathbf{g}_{\text{out},m}/s_m$ ($s_m = \|\mathbf{g}_{\text{out},m}\|_\infty + 10^{-8}$) bounds $|\beta \tilde{\mathbf{u}}_m| \le \beta$ inside the linear $R_Z$ response band while $s_m$ restores upstream gradient scale. This forward field perturbation matches the exact transpose sensitivity in the zero-commutator $\beta \to 0$ limit; at finite depth $L$, alignment remains tight on single-qubit visible fields ($\cos(\text{JVP},\text{VJP})_h \ge 0.990$) and stays positively correlated on $ZZ$ couplings during early and mid-training (Table~\ref{tab:reciprocity}).
+
+% ==============================================================================
+\clearpage
+\section{Extended Optimizer Controls, Shot Scaling, and Runtime Benchmarks}
+\label{app:ext_opt}
+\label{app:runtime}
+This appendix collects the complete multi-seed optimizer sweeps supporting Main Section~\ref{sec:main_results}--\ref{sec:mech_opt}: literature comparisons, $10\text{k}\to 160\text{k}$ shot curves, GPU simulation timings, $W_{\text{cond}}\mathbf{c}$ disentanglement controls, and \texttt{StabilizedAdam} factor isolation.
+
+\subsection{Literature Baselines, Shot-Budget Scaling, and CUDA Runtime}
+Alongside PSR and SPSA, we tested \texttt{PQC-QuDDPM} and \texttt{QCBM-MMD} under identical $80\text{k}$ noisy shots (Figure~\ref{fig:main_comparison}, Table~\ref{tab:lit_baselines}), as well as shot-budget sweeps from $10\text{k}$ to $160\text{k}$ (Table~\ref{tab:shot_scaling}). Wall-clock timings on Tesla T4 CUDA simulation ($13.32\,$s per MNIST seed; $56.82\,$s per Fashion seed) are plotted in Figure~\ref{fig:complexity_timing} and listed in Table~\ref{tab:timings}.
+
+\begin{figure}[ht!]
+\centering
+\figslot[0.82\linewidth]{figures/fig_main_comparison.pdf}{Main 5-Seed Comparison Bars across MNIST \& Fashion-MNIST.}
+\caption{\textbf{Main $5$-Seed Benchmark Bars Across NISQ Optimizers, Literature Baselines, and Noiseless References.} QER solves $198$--$224$p joint optimization under $80\text{k}$ shots where SPSA/PSR/PQC baselines collapse.}
+\label{fig:main_comparison}
+\end{figure}
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{Shot- and Noise-Matched Literature Baselines vs.\ Noiseless Classical References ($80\text{k}$ Shots).}}
+\label{tab:lit_baselines}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llccccccc@{}}
+\toprule
+\textbf{Method / Architecture} & \textbf{Family} & \textbf{Params} & \textbf{Grad.\ Cost / Step} & \textbf{ClfAcc (\%) $\uparrow$} & \textbf{CondFeatFID $\downarrow$} & \textbf{FeatFID $\downarrow$} & \textbf{Prec $\uparrow$} & \textbf{Rec $\uparrow$} \\
+\midrule
+\qerLitBaselineRows
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\FloatBarrier
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{Shot-Budget Scaling ($10\text{k}\to 160\text{k}$ Shots on MNIST, $3$ Seeds; plotted in Figure~\ref{fig:shot_scaling}).}}
+\label{tab:shot_scaling}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccccccc@{}}
+\toprule
+\textbf{Shots / Method} & \textbf{Params} & \textbf{ClfAcc (\%) $\uparrow$} & \textbf{CondLatFID $\downarrow$} & \textbf{LatFID $\downarrow$} & \textbf{CondFeatFID $\downarrow$} & \textbf{FeatFID $\downarrow$} & \textbf{Prec $\uparrow$} & \textbf{Rec $\uparrow$} & \textbf{LatStd} \\
+\midrule
+\qerShotScalingRows
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{figure}[ht!]
+\centering
+\figslot[0.82\linewidth]{figures/fig_complexity_timing.pdf}{Gradient Complexity and CUDA Simulator Throughput.}
+\caption{\textbf{Circuit Evaluation Scaling and Batched CUDA Trajectory Throughput.} Contrastive estimation executes $200$ full updates inside the same $80\text{k}$-shot budget where PSR completes $17$--$22$ steps ($13.32\,\text{s}$ MNIST, $56.82\,\text{s}$ Fashion).}
+\label{fig:complexity_timing}
+\end{figure}
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{Circuit Evaluations, Steps Executed, and CUDA Runtime at $80\text{k}$ Shots ($5$ Seeds).}}
+\label{tab:timings}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llcccc@{}}
+\toprule
+\textbf{Dataset ($n_{\text{vis}}+n_{\text{hid}}$)} & \textbf{Optimizer} & \textbf{Circuits / Sample} & \textbf{Steps Executed} & \textbf{Runtime / Seed} & \textbf{ClfAcc (\%)} \\
+\midrule
+\qerTimingRows
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\FloatBarrier
+\clearpage
+\subsection{Causal \texorpdfstring{$W_{\text{cond}}\mathbf{c}$}{W\_cond c} Disentanglement, Prototype Lookup, and Additional Optimizer Controls}
+Even when we hold $W_{\text{cond}}\mathbf{c}$ fixed or apply exact chain-rule gradients to $W_{\text{cond}}$ while reserving QPU calls for $\boldsymbol{\theta}$, tuned $3\times 3$ SPSA, \texttt{QN-SPSA-CR}, \texttt{iCANS}, \texttt{Rosalin}, and active-parameter \texttt{Exact-PSR} still stall at $9.4\%$--$25.9\%$ on joint $198$-parameter MNIST training (Figure~\ref{fig:cond_opt_controls}, Table~\ref{tab:wcond_opt_controls}). Only when $W_{\text{cond}}\mathbf{c}$ is fixed to an already-trained shared tensor does \texttt{Exact-PSR} recover ($100.0\%$); when classical projections are removed completely on $13$--$14$-qubit label-qubit circuits, QERD reaches $99.3\%$ ($13$q) and $71.0\%$ ($14$q) on its own.
+
+\begin{figure}[ht!]
+\centering
+\figslot[0.78\linewidth]{analysis/fig_conditioning_opt_controls.pdf}{Four-Panel 3-Seed Causal \& Optimizer Controls.}
+\caption{\textbf{Causal $W_{\text{cond}}\mathbf{c}$ Disentanglement, Chain-Rule / QN-SPSA / PSR Baselines, and Sum-Normalized Scaling ($3$ Seeds).} (a) Zero-$W_{\text{cond}}$ label qubits; (b) Chain-Rule $W_{\text{cond}}$ and PSR/SPSA failures ($10.2\%$--$25.9\%$); (c--d) shallow sum-norm BP variance and $4\text{k}$-shot SNR ($n=6\to 14$).}
+\label{fig:cond_opt_controls}
+\end{figure}
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{Causal $W_{\text{cond}}\mathbf{c}$ Disentanglement, Prototype Lookup, $3\times 3$ SPSA, QN-SPSA, and Active/Shot-Frugal PSR Controls ($3$ Seeds, $80\text{k}$ NISQ Shots, $N=1{,}000$ at $\sigma_{\text{step}}=0.35$).}}
+\label{tab:wcond_opt_controls}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llccccc@{}}
+\toprule
+\textbf{Study / Task} & \textbf{Model / Optimizer Control} & \textbf{Params $P$} & \textbf{ClfAcc / SubAcc $\uparrow$} & \textbf{FeatFID / 10-Way $\downarrow/\uparrow$} & \textbf{Prec $\uparrow$} & \textbf{Rec $\uparrow$} \\
+\midrule
+\multirow{5}{*}{\shortstack[l]{Zero-$W_{\text{cond}}$ Label Qubits\\($0$ classical params)}} & $13$q $\{0,1\}$ QER \texttt{no-zz} ($L{=}3$) / \texttt{all} ($L{=}2$) & $13$ / $91$ & $49.9$ / $61.4\%$ & $2.4\%$ / $7.5\%$ {\scriptsize(10-way)} & -- & -- \\
+ & \textbf{$13$q $\{0,1\}$ \texttt{Adam-QER all} ($L{=}3$)} & $91$ & $\mathbf{99.3 \pm 0.2\%}$ & $2.9 \pm 2.1\%$ {\scriptsize(10-way)} & -- & -- \\
+ & $13$q $\{0,1\}$ Tuned SPSA / \texttt{iCANS-PSR} ($L{=}3$) & $91$ & $50.0$ / $49.6\%$ & $0.0\%$ / $0.0\%$ {\scriptsize(10-way)} & -- & -- \\
+ & $14$q $\{0,1,4\}$ QER \texttt{no-zz} ($L{=}3$) & $14$ & $33.1 \pm 1.8\%$ & $23.3 \pm 6.7\%$ {\scriptsize(10-way)} & -- & -- \\
+ & \textbf{$14$q $\{0,1,4\}$ \texttt{Adam-QER all} ($L{=}3$)} & $105$ & $\mathbf{71.0 \pm 16.0\%}$ & $\mathbf{59.3 \pm 9.6\%}$ {\scriptsize(10-way)} & -- & -- \\
+\midrule
+\multirow{6}{*}{\shortstack[l]{$10$-Class MNIST $W_{\text{cond}}$:\\Shared, Chain-Rule,\\Frozen \& Prototype}} & \textbf{\texttt{Adam-QER} (Std Joint, $L{=}2$)} & $198$ & $97.2 \pm 2.0\%$ & $173.1 \pm 1.4$ {\scriptsize(FeatFID)} & $0.999$ & $0.000$ \\
+ & Shared Fixed $W_{\text{cond}}$: QER / Exact-PSR / SPSA & $78$ {\scriptsize(QPU only)} & $\mathbf{100.0}$ / $\mathbf{100.0}$ / $83.0\%$ & $162.7$ / $160.5$ / $528.0$ & $0.971$/$0.985$/$0.938$ & $0.000$ \\
+ & Chain-Rule $W_{\text{cond}}$: SPSA / PSR-FD / Exact-PSR / QN-SPSA & $198$ {\scriptsize(joint)} & $25.9$ / $17.0$ / $14.3$ / $10.2\%$ & $914.1$ / $973.5$ / $1033.1$ / $1185.2$ & $0.737$--$0.967$ & $0.000$ \\
+ & Frozen-Ortho $W_{\text{cond}}$ (\texttt{QER all} / \texttt{nozz} / \texttt{SPSA}) & $78$ / $12$ / $78$ & $7.9$ / $8.6$ / $8.2\%$ & $716.4$ / $471.2$ / $1117.2$ & $0.922$/$0.901$/$0.798$ & $0.191$/$0.210$/$0.000$ \\
+ & Unconditional QER (\texttt{cond=0}, \texttt{all} / \texttt{no-zz}) & $78$ / $12$ & $9.5$ / $10.1\%$ & $507.1$ / $465.0$ {\scriptsize(FeatFID)} & $0.900$ / $0.902$ & $0.246$ / $0.279$ \\
+ & Class-Mean Prototype ($\sigma_{\text{step}}{=}0.0$ det.\ / $\sigma_{\text{step}}{=}0.35$) & -- & $100.0$ / $85.0\%$ & $228.2$ / $125.9$ {\scriptsize(FeatFID)} & $1.000$ / $0.944$ & $0.000$ / $0.383$ \\
+\midrule
+\multirow{8}{*}{\shortstack[l]{SPSA Grid, Variance\\Boundary, QN-SPSA,\\\& PSR ($10$-Cls)}} & Best $3{\times}3$ Grid SPSA ($\mathrm{lr}=0.04, c_0=0.10$) & $198$ {\scriptsize(unmasked)} & $22.7 \pm 1.4\%$ & $936.5 \pm 82.6$ {\scriptsize(FeatFID)} & $0.900$ & $0.000$ \\
+ & Active-Col SPSA ($90$ act.) / $4$-sh CR SPSA & $198$ & $17.2$ / $19.4\%$ & $944.8$ / $997.5$ {\scriptsize(FeatFID)} & $0.953$ / $0.933$ & $0.000$ \\
+ & $W_{\text{cond}}$-Only SPSA ($\theta{=}0$, unmasked $120$p / $12$p act.) & $120$ & $35.4$ / $90.5\%$ & $482.5$ / $294.0$ {\scriptsize(FeatFID)} & $0.919$ / $0.977$ & $0.000$ / $0.004$ \\
+ & $W_{\text{cond}}$-Only Exact-PSR ($\theta{=}0$, $12$p act., $49$q/st, $204$ st) & $120$ {\scriptsize($12$ act.)} & $87.9 \pm 5.5\%$ & $299.3 \pm 67.9$ {\scriptsize(FeatFID)} & $0.954$ & $0.000$ \\
+ & \texttt{iCANS}-FD ($k{=}15$, $6$ sh/q) / \texttt{iCANS}-ExactPSR ($\pm\pi/2$) & $198$ & $9.4$ / $11.0\%$ & $1024.4$ / $992.1$ {\scriptsize(FeatFID)} & $0.933$ / $0.919$ & $0.000$ \\
+ & \texttt{Exact-PSR} ($\pm\pi/2, 313\text{q/st}$) / \texttt{Rosalin-PSR} ($4\text{sh}$) & $198$ & $14.1$ / $11.8\%$ & $1024.0$ / $1039.3$ {\scriptsize(FeatFID)} & $0.708$ / $0.915$ & $0.000$ \\
+ & \textit{Ref:} \texttt{DDPM} ($80\text{k}$ Cos / $160\text{k}$ Const / $160\text{k}$ Cos) & $192$ & $94.5$ / $91.5$ / $98.8\%$ & $293.2$ / $279.1$ / $260.2$ & $0.979$--$0.994$ & $0.000$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\FloatBarrier
+\clearpage
+\subsection{\texttt{StabilizedAdam} Stepper Isolation, Clip Checks, and Discrete Regression}
+We isolated each part of \texttt{StabilizedAdam} ($\beta_2$ normalization, cosine LR decay, weight decay, and \texttt{auto\_beta\_guard}) alongside the OLS clip check from Proposition~\ref{prop:dilution} and a standalone non-diffusion \texttt{QERLayer} classifier (Table~\ref{tab:adam_cal_controls}). Table~\ref{tab:self_tests} also records a representative single-seed CPU smoke run from the \texttt{qerd} package self-suite on small discrete spin patterns and hybrid PyTorch backward parity (exact wall clock depends on host CPU).
+
+\begin{table}[h!]
+\centering
+\caption{\textbf{\texttt{StabilizedAdam} Stepper Isolation, Proposition~\ref{prop:dilution} Clip Check, and Standalone Non-Diffusion \texttt{QERLayer} ($3$ Seeds, NISQ $3.5\%/4\%$).}}
+\label{tab:adam_cal_controls}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llcccc@{}}
+\toprule
+\textbf{Study / Control} & \textbf{Variant / Configuration} & \textbf{ClfAcc (\%) $\uparrow$} & \textbf{CondLatFID $\downarrow$} & \textbf{FeatFID $\downarrow$} & \textbf{Diagnostic Metric} \\
+\midrule
+\multirow{9}{*}{\shortstack[l]{\texttt{StabilizedAdam}\\Stepper Ablations,\\Factor Isolation \&\\Guard Rescue\\($80\text{k}$ NISQ, $198$p)}} & \textbf{\texttt{Adam-QER Full} (\texttt{QER-Grad} + \texttt{StabilizedAdam})} & $\mathbf{97.2 \pm 2.0\%}$ & $2.76 \pm 0.03$ & $\mathbf{173.1 \pm 1.4}$ & $\text{Prec}=0.999$, $\text{Cov}=0.141$ \\
+ & No \texttt{auto\_beta\_guard} (fixed $\beta=0.45$) & $97.2 \pm 2.0\%$ & $2.76 \pm 0.03$ & $173.1 \pm 1.4$ & Dormant at safe $\beta_0=0.45$ \\
+ & No Weight Decay ($\eta_w = 0$) & $95.9 \pm 3.0\%$ & $2.88 \pm 0.03$ & $178.1 \pm 3.7$ & $\text{Cov}=0.131$ \\
+ & No Cosine LR (const $\alpha = 0.12$) & $96.4 \pm 4.4\%$ & $\mathbf{2.45 \pm 0.10}$ & $195.8 \pm 27.5$ & $20\times$ higher FeatFID std \\
+ & No Adam Moments (\texttt{use\_adam=False}, default $\alpha{=}0.12$) & $86.8 \pm 3.6\%$ & $1.82 \pm 0.03$ & $391.6 \pm 14.5$ & Scale-unnormalized ($-10.4\text{ pp}$ at fixed lr) \\
+ & \texttt{RMSprop-Only} ($\beta_1{=}0, \beta_2{=}0.98$, $\mathrm{lr}{=}0.12$ / $0.06$) & $96.6$ / $\mathbf{99.6\%}$ & $2.72$ / $2.53$ & $174.8$ / $160.8$ & Matches Adam via $\beta_2$ scaling \\
+ & \texttt{Momentum-Only} ($\beta_1{=}0.75, \beta_2{=}0$, $\mathrm{lr}{=}0.04 \to 0.12$) & $37.8 \to 87.1\%$ & $2.25 \to 1.85$ & $814.8 \to 390.4$ & Raw-grad starved at $\mathrm{lr}\le 0.12$ \\
+ & \texttt{Momentum-Only} ($\beta_1{=}0.75, \beta_2{=}0$, retuned $\mathrm{lr}{=}0.25$ / $0.50$) & $97.6$ / $\mathbf{99.5\%}$ & $1.76$ / $2.06$ & $194.5$ / $\mathbf{154.2}$ & Matches once $4\times$ LR-retuned \\
+ & Wraparound Rescue ($\beta_0{=}11.0$: Guard ON vs.\ OFF) & $\mathbf{93.9}$ / $0.7\%$ & $2.88$ / $6.88$ & $\mathbf{195.5}$ / $701.7$ & Shrinks $2.0 \to \beta{=}6.19$ vs.\ $11.00$ \\
+\midrule
+\multirow{3}{*}{\shortstack[l]{Prop.~\ref{prop:dilution} Clip Check\\(Calibrator Bounds)}} & Forward OLS ($\text{clip} \in [0.2, 1.0]$) & $88.1 \pm 2.5\%$ & $6.33 \pm 0.12$ & $255.3 \pm 5.1$ & Clip $=7.42\%$ (lower floor $7.36\%$) \\
+ & Inverse OLS ($\text{clip} \in [0.2, 1.0]$) & $\mathbf{99.9 \pm 0.1\%}$ & $\mathbf{2.31 \pm 0.03}$ & $\mathbf{191.5 \pm 6.2}$ & Upper clip $=1.18\%$ \\
+ & \textbf{Inverse OLS ($\text{clip} \in [0.2, 2.0]$)} & $\mathbf{99.9 \pm 0.1\%}$ & $\mathbf{2.31 \pm 0.03}$ & $\mathbf{191.5 \pm 6.2}$ & \textbf{Clip $=0.00\%$}, gains $0.79$--$0.54$ \\
+\midrule
+\multirow{2}{*}{\shortstack[l]{Standalone Non-Diffusion\\Classification ($160$ steps)}} & \textbf{\texttt{QERLayer(x, h)} ($40$ NISQ shots/call)} & $47.0 \pm 0.2\%$ & -- & -- & $\text{CE Loss} = 1.564 \pm 0.012$ \\
+ & \textit{Ref:} \texttt{Exact-AD} ($12$q unitary, clean) & $49.6 \pm 0.3\%$ & -- & -- & $\text{CE Loss} = 1.478 \pm 0.014$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{Validation on Discrete Spin Patterns ($2\times 4, 3\times 4$) and Standalone PyTorch VJP Regression (Single-Seed Smoke Run).}}
+\label{tab:self_tests}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Task / Mode} & \textbf{Qubits} & \textbf{Calibrator} & \textbf{Observed Metric} & \textbf{Wall Clock (CPU)} \\
+\midrule
+Discrete $2\times 4$ Spin Patterns ($4$-class) & $8 + 2$ & Forward OLS ($g_0=0.75$) & $\text{MSE}=0.0021$ / $\text{SignAcc}=100.0\%$ & $0.8\,$s \\
+Discrete $3\times 4$ Grayscale Patterns ($4$-class) & $12 + 0$ & Forward OLS ($g_0=0.75$) & $\text{MSE}=0.0685$ / $\text{SignAcc}=100.0\%$ & $5.7\,$s \\
+Torch Backend $2\times 4$ Parity Check & $8 + 2$ & Forward OLS ($g_0=0.75$) & $\text{MSE}=0.0021$ / $\text{SignAcc}=100.0\%$ & Passed \\
+Hybrid \texttt{QERLayer} / \texttt{QERDDiffusionLayer} & $8 + 0$ & Raw ($\mathcal{O}(1)$ VJP) & $\text{MSE}: 0.8986 \to 0.1435$ & Converged \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\FloatBarrier
+% ==============================================================================
+\clearpage
+\section{MNIST \& Fashion Component Ablations}
+\label{app:mnist_abl}
+
+\subsection{Six-Row Component and Calibration Ablations}
+Tables~\ref{tab:abl_mnist}--\ref{tab:abl_fashion} and Figure~\ref{fig:ablations} break down the component and calibration runs on MNIST and Fashion-MNIST: forward OLS pulls \texttt{CondLatFID} up via corner overshoot ($2.49 \to 5.31$ MNIST, $2.52 \to 5.95$ Fashion), inverse OLS eliminates that overshoot ($2.53 / 2.54$), whitened \texttt{no-zz} and \texttt{wcond-only} match full accuracy ($100.0\% / 71.1\%$--$71.5\%$), and dropping Adam scaling (\texttt{sgd}) lowers accuracy ($76.5\% / 66.9\%$). Qualitative sample grids for these tasks appear in Main Body Figure~\ref{fig:samples_grid}.
+
+\begin{figure}[ht!]
+\centering
+\figslot[0.78\linewidth]{figures/fig_ablations.pdf}{6-Row Component Ablation Study on MNIST and Fashion-MNIST.}
+\caption{\textbf{Six-Row Component and OLS Calibration Ablation ($3$ Seeds, $80\text{k}$ Shots).}}
+\label{fig:ablations}
+\end{figure}
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{$6$-Row MNIST Component \& Calibration Ablation ($12+0$q, $80\text{k}$ Shots, $3$ Seeds).}}
+\label{tab:abl_mnist}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+\textbf{Ablation Variant} & \textbf{ClfAcc (\%) $\uparrow$} & \textbf{CondLatFID $\downarrow$} & \textbf{LatFID $\downarrow$} & \textbf{FeatFID $\downarrow$} & \textbf{Prec $\uparrow$} & \textbf{Rec $\uparrow$} & \textbf{LatStd} \\
+\midrule
+\qerAblMnistRows
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{$6$-Row Fashion-MNIST Component \& Calibration Ablation ($12+2$q, $80\text{k}$ Shots, $3$ Seeds).}}
+\label{tab:abl_fashion}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+\textbf{Ablation Variant} & \textbf{ClfAcc (\%) $\uparrow$} & \textbf{CondLatFID $\downarrow$} & \textbf{LatFID $\downarrow$} & \textbf{FeatFID $\downarrow$} & \textbf{Prec $\uparrow$} & \textbf{Rec $\uparrow$} & \textbf{LatStd} \\
+\midrule
+\qerAblFashionRows
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\FloatBarrier
+
+% ==============================================================================
+\clearpage
+\section{Gradient Fidelity, Unit-Consistent BP Scaling, and Diagnostics}
+\label{app:grad_bp}
+
+\subsection{Cosine Alignment Survey Across Steps, Perturbation Radius \texorpdfstring{$\beta$}{beta}, Depth \texorpdfstring{$L$}{L}, and Noise}
+To map where contrastive surrogates align with exact MSE gradients, we sweep trajectory steps ($t \in \{1..200\}$), perturbation radii ($\beta \in [0.10, 1.20]$), Trotter depths ($L \in \{1..6\}$), and depolarizing rates ($p_{\text{depol}} \in [0, 0.08]$) in Figure~\ref{fig:grad_alignment} and Table~\ref{tab:grad_align}.
+
+\begin{figure}[ht!]
+\centering
+\figslot[0.82\linewidth]{figures/fig_grad_alignment.pdf}{Gradient Alignment Across Steps, Beta, Depth L, and Depol Noise.}
+\caption{\textbf{Empirical Gradient Alignment Survey Across Trajectory Steps, $\beta$, Depth $L$, and Depolarizing Noise.}}
+\label{fig:grad_alignment}
+\end{figure}
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{Gradient Cosine Alignment Across Steps, Perturbation Radius $\beta$, Depth $L$, and Noise ($12$q Ising Circuit).}}
+\label{tab:grad_align}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llccccc@{}}
+\toprule
+\textbf{Sweep Axis} & \textbf{Setting} & $\cos(\hat{g}, -\nabla\mathcal{L}_{\text{MSE}})_{\text{all}} \uparrow$ & $\cos(ZZ) \uparrow$ & $\cos(\text{Bias/Cond}) \uparrow$ & $\cos(\text{CorrSurr}) \uparrow$ & \textbf{Shot-QER} $\cos \uparrow$ \\
+\midrule
+\qerGradAlignRows
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\FloatBarrier
+\clearpage
+\subsection{Surrogate-vs-MSE Decomposition (\texttt{QER-Res}) and Unit-Consistent Scaling (\texorpdfstring{$n=6\to 14$}{n=6..14})}
+Numerical values behind Main Body Figure~\ref{fig:grad_fidelity_proof} are broken down in Table~\ref{tab:grad_proof_3seed} ($3$-seed target vs.\ residual nudging alongside batch-window NISQ shot SNR), and Table~\ref{tab:bp_scaling} lists unit-consistent $ZZ$ gradient variance from $n=6$ to $14$ qubits.
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{$3$-Seed Surrogate vs.\ MSE Decomposition and Batch-Window NISQ Shot SNR ($3.5\%/4\%$; plotted in Figure~\ref{fig:grad_fidelity_proof}).}}
+\label{tab:grad_proof_3seed}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{Diagnostic Metric / Step ($3$ Seeds)} & $t=1$ & $t=25$ & $t=50$ & $t=100$ & $t=150$ & $t=200$ \\
+\midrule
+$\cos(\hat{g}_{\text{QER}}, \nabla\mathbb{E}[x_0^\top z])_{ZZ}$ (Clean) & $+0.995 \pm 0.000$ & $+0.745 \pm 0.082$ & $+0.751 \pm 0.052$ & $+0.574 \pm 0.092$ & $+0.549 \pm 0.111$ & $+0.378 \pm 0.240$ \\
+$\cos(\hat{g}_{\text{QER}}, \nabla\mathbb{E}[x_0^\top z])_{\text{all}}$ (Clean) & $+0.905 \pm 0.016$ & $+0.824 \pm 0.049$ & $+0.802 \pm 0.050$ & $+0.683 \pm 0.097$ & $+0.694 \pm 0.065$ & $+0.612 \pm 0.116$ \\
+$\cos(\hat{g}_{\text{QER}}, -\nabla\mathcal{L}_{\text{MSE}})_{ZZ}$ (Clean) & $+0.811 \pm 0.023$ & $-0.200 \pm 0.059$ & $-0.288 \pm 0.115$ & $-0.146 \pm 0.218$ & $+0.012 \pm 0.059$ & $+0.315 \pm 0.047$ \\
+$\cos(\hat{g}_{\text{res}}, -\nabla\mathcal{L}_{\text{MSE}})_{ZZ}$ (Residual, Clean) & $+0.994 \pm 0.001$ & $+0.494 \pm 0.085$ & $+0.472 \pm 0.041$ & $+0.404 \pm 0.019$ & $+0.289 \pm 0.123$ & $+0.404 \pm 0.026$ \\
+$\cos(\hat{g}_{\text{res}}, -\nabla\mathcal{L}_{\text{MSE}})_{ZZ}$ (Residual, NISQ) & $+0.991 \pm 0.001$ & $+0.635 \pm 0.057$ & $+0.519 \pm 0.054$ & $+0.502 \pm 0.040$ & $+0.449 \pm 0.096$ & $+0.574 \pm 0.043$ \\
+\midrule
+\textbf{Step-$50$ NISQ Shot SNR ($400$ sh/batch)} & \textbf{$K{=}1$ ($400$ sh)} & \textbf{$K{=}4$ ($1.6\text{k}$)} & \textbf{$K{=}8$ ($3.2\text{k}$)} & \textbf{$K{=}16$ ($6.4\text{k}$)} & \textbf{$20\text{k}$ Sh Acc} & \textbf{$80\text{k}$ Sh Acc} \\
+\midrule
+Shot-QER ($\beta=0.45$, NISQ $3.5\%/4\%$) & $+0.292 \pm 0.021$ & $+0.504 \pm 0.027$ & $+0.612 \pm 0.034$ & $+0.712 \pm 0.042$ & $95.2 \pm 5.1\%$ & $99.5 \pm 0.7\%$ \\
+Shot-QER ($\beta=0.10$) & $+0.066 \pm 0.027$ & $+0.133 \pm 0.052$ & $+0.187 \pm 0.074$ & $+0.255 \pm 0.095$ & -- & -- \\
+Shot-SPSA (equal $400$ sh/batch, NISQ) & $+0.006 \pm 0.016$ & $+0.015 \pm 0.038$ & $+0.021 \pm 0.055$ & $+0.028 \pm 0.073$ & $10.2 \pm 1.0\%$ & $9.7 \pm 1.2\%$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{Unit-Consistent $ZZ$ Variance Scaling ($n\in\{6..14\}$) and Equal-Target $4{,}000$-Shot NISQ SNR ($L=2$, $\mathcal{U}[-0.4, 0.4]$ Init).}}
+\label{tab:bp_scaling}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}cccccccc@{}}
+\toprule
+\textbf{$n$} & \textbf{$L$} & \textbf{$|E|$} & $\mathrm{Var}_{\text{sum}}(\hat{g}_{\text{QER}, ZZ})$ & $\mathrm{Var}_{\text{sum}}(-\nabla \mathcal{L}_{\text{MSE}, ZZ})$ & \textbf{Sum Ratio} & \textbf{Surr ($\mathbf{g}_{\text{ec}}$): QER / ePSR / SPSA} & \textbf{MSE ($\mathbf{g}_{\text{em}}$): QER-Res / ePSR / SPSA} \\
+\midrule
+6  & 2 & 15 & $8.62\times 10^{-3}$ & $2.83\times 10^{-3}$ & $3.05\times$ & $\mathbf{+0.885}$ / $+0.216$ / $+0.111$ & $\mathbf{+0.867}$ / $+0.210$ / $+0.167$ \\
+6  & 6 & 15 & $3.42\times 10^{-2}$ & $8.46\times 10^{-2}$ & $0.40\times$ & -- & -- \\
+8  & 2 & 28 & $1.06\times 10^{-2}$ & $2.56\times 10^{-3}$ & $4.15\times$ & $\mathbf{+0.891}$ / $+0.302$ / $+0.188$ & $\mathbf{+0.874}$ / $+0.261$ / $+0.247$ \\
+8  & 6 & 28 & $4.18\times 10^{-2}$ & $9.85\times 10^{-2}$ & $0.42\times$ & -- & -- \\
+10 & 2 & 45 & $7.86\times 10^{-3}$ & $2.77\times 10^{-3}$ & $2.84\times$ & $\mathbf{+0.886}$ / $+0.106$ / $+0.100$ & $\mathbf{+0.863}$ / $+0.101$ / $+0.156$ \\
+10 & 6 & 45 & $4.35\times 10^{-2}$ & $5.93\times 10^{-2}$ & $0.73\times$ & -- & -- \\
+12 & 2 & 66 & $7.21\times 10^{-3}$ & $2.42\times 10^{-3}$ & $2.98\times$ & $\mathbf{+0.855}$ / $+0.099$ / $+0.038$ & $\mathbf{+0.849}$ / $+0.106$ / $+0.052$ \\
+12 & 6 & 66 & $4.95\times 10^{-2}$ & $6.68\times 10^{-2}$ & $0.74\times$ & -- & -- \\
+14 & 2 & 91 & $5.54\times 10^{-3}$ & $2.04\times 10^{-3}$ & $2.72\times$ & $\mathbf{+0.827}$ / $+0.065$ / $+0.024$ & $\mathbf{+0.766}$ / $+0.097$ / $+0.033$ \\
+14 & 6 & 91 & $3.68\times 10^{-2}$ & $4.50\times 10^{-2}$ & $0.82\times$ & -- & -- \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\FloatBarrier
+\clearpage
+\subsection{Checkpoint Reciprocity, Stepper Isolation, and Matched-Control Suites}
+The multi-panel diagnostics in Figures~\ref{fig:reciprocity_stepper} and~\ref{fig:matched_controls} back up Tables~\ref{tab:reciprocity} and~\ref{tab:adam_cal_controls}, showing trained checkpoint reciprocity, optimizer factor isolation, and matched noiseless \texttt{Exact-AD} controls.
+
+\begin{figure}[ht!]
+\centering
+\figslot[0.74\linewidth]{analysis/fig_reciprocity_stepper_checks.pdf}{Three-Panel Suite: Trained L=2 Checkpoints, Stepper Isolation, Exact-AD Init.}
+\caption{\textbf{Trained Reciprocity, Stepper Factor Isolation, and Schedule Controls ($3$ Seeds).} (a) $L=2$ Clean/NISQ checkpoint reciprocity; (b) $\beta_1$ vs.\ $\beta_2$ factor isolation and $\beta_0=11.0$ guard rescue; (c) $L=4$ Spin-Glass \texttt{Exact-AD} initialization and cosine schedule effects.}
+\label{fig:reciprocity_stepper}
+\end{figure}
+
+\begin{figure}[ht!]
+\centering
+\figslot[0.74\linewidth]{analysis/fig_matched_controls.pdf}{Four-Panel Matched Control Suite: Same-Circuit Exact-AD, L=4 Spin-Glass, Reciprocity, Hybrid PSR.}
+\caption{\textbf{Matched Same-Circuit \texttt{Exact-AD}, $L=4$ Spin-Glass, and Hybrid Field-PSR Controls ($3$ Seeds).} (a) Same-circuit noiseless \texttt{Exact-AD} on MNIST and Fashion-MNIST; (b) matched $L=4$ Spin-Glass \texttt{Exact-AD} (\texttt{MSE+FwdOLS+rand08+Cosine}, $92.2\%$--$94.5\%$); (c) trained $L=4$ Spin-Glass Clean vs.\ NISQ reciprocity; (d) equal-shot ($1.38\text{M}$ shots) hybrid \texttt{QERLayer} vs.\ field-wise \texttt{PSR} ($h=48$).}
+\label{fig:matched_controls}
+\end{figure}
+
+\FloatBarrier
+
+% ==============================================================================
+\clearpage
+\section{Hardware Noise Sweeps, Unwhitened AE, and Complete Spin-Glass Factorial}
+\label{app:hw_spin}
+
+\subsection{Gate-Noise Stress Sweeps, Coupling Topologies, and Trotter Depth}
+Under stronger single-qubit depolarizing rates ($p_{\text{depol}} \in [0, 0.08]$) and explicit two-qubit CNOT noise ($p_{\text{depol},2\text{q}}=0.015$), accuracy stays resilient up to moderate depth before 2Q errors accumulate at $L=4$--$6$ (Figure~\ref{fig:noise_topo}, Tables~\ref{tab:noise_sweep}--\ref{tab:topo_depth}). Because MNIST latents form a $1$-D vector ($D=12$), \texttt{grid8}, \texttt{grid4}, and \texttt{chain} all reduce to the same $11$-edge nearest-neighbor chain ($44$ CNOTs) and are grouped into one row in Table~\ref{tab:topo_depth}.
+
+\begin{figure}[ht!]
+\centering
+\figslot[0.82\linewidth]{figures/fig_noise_topo.pdf}{NISQ Hardware Realism Sweeps: 1Q Depol, Topology, and 2Q Depth.}
+\caption{\textbf{NISQ Hardware Realism Sweeps ($p_{\text{depol}} \in [0,0.08]$ and $p_{\text{depol},2\text{q}}=0.015$ CNOT Depth/Topology).}}
+\label{fig:noise_topo}
+\end{figure}
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{Depolarizing Noise Stress Sweep ($p_{\text{depol}}\in[0,0.08], p_{\text{readout}}=0.04$, MNIST $12+0$q).}}
+\label{tab:noise_sweep}
+\small
+\begin{tabular}{@{}ccccccc@{}}
+\toprule
+$p_{\text{depol}}$ & \textbf{ClfAcc (\%) $\uparrow$} & \textbf{CondLatFID $\downarrow$} & \textbf{LatFID $\downarrow$} & \textbf{FeatFID $\downarrow$} & \textbf{Prec $\uparrow$} & \textbf{Rec $\uparrow$} \\
+\midrule
+\qerNoiseSweepRows
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{Hardware Topology \& Trotter Depth Under Two-Qubit CNOT Noise ($p_{\text{depol},2\text{q}}=0.015, p_{\text{depol}}=0.005$).}}
+\label{tab:topo_depth}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{Sweep Axis / Config} & \textbf{2Q CNOTs} & \textbf{ClfAcc (\%) $\uparrow$} & \textbf{CondLatFID $\downarrow$} & \textbf{FeatFID $\downarrow$} & \textbf{Prec $\uparrow$} & \textbf{Rec $\uparrow$} \\
+\midrule
+\qerTopoDepthRows
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\FloatBarrier
+\clearpage
+\subsection{Unwhitened Fashion-MNIST and Shallow \texorpdfstring{$L=2$}{L=2} Pure-QPU Spin Glass}
+Disabling \texttt{BatchNorm1d} in \texttt{ConvLatentAE} reveals cross-channel latent structure (Table~\ref{tab:unwhitened_fashion}), while Table~\ref{tab:pure_qpu} and Figure~\ref{fig:bp_entanglement} isolate shallow $L=2$ zero-AE cluster spin-glass runs prior to the deeper $L=4$ factorial study.
+
+\begin{figure}[ht!]
+\centering
+\figslot[0.74\linewidth]{figures/fig_bp_entanglement.pdf}{Two-Panel Multi-Qubit ZZ Entanglement Study.}
+\caption{\textbf{Multi-Qubit $ZZ$ Necessity on Zero-AE Cluster Spin Glass (a) and \texttt{BatchNorm}-Free Fashion-MNIST (b).}}
+\label{fig:bp_entanglement}
+\end{figure}
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{Unwhitened Latent Control (\texttt{ConvLatentAE} with \texttt{BatchNorm1d} Disabled): Full $ZZ$ vs.\ \texttt{no-zz}.}}
+\label{tab:unwhitened_fashion}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+\textbf{Variant} & \textbf{Params} & \textbf{ClfAcc (\%) $\uparrow$} & \textbf{CondLatFID $\downarrow$} & \textbf{LatFID $\downarrow$} & \textbf{FeatFID $\downarrow$} & \textbf{Prec $\uparrow$} & \textbf{Rec $\uparrow$} \\
+\midrule
+\qerUnwhitenedFashionRows
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{Autoencoder-Free Pure-QPU $12$q Stride-$3$ Spin Glass ($L=2$, $B_c=0.90$, Option A, $\mathbf{c}=\mathbf{0}$).}}
+\label{tab:pure_qpu}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Variant / Topology} & \textbf{Intra-Cluster Corr $\uparrow$} & \textbf{Corr.\ RMSE $\downarrow$} & \textbf{Pattern Acc $\uparrow$} & \textbf{Mode Cov $\uparrow$} & \textbf{BitStd} \\
+\midrule
+\qerPureQpuRows
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\FloatBarrier
+\clearpage
+\subsection{Complete \texorpdfstring{$12$q}{12q} Spin-Glass Factorial Attribution (\texorpdfstring{$L=2$ vs.\ $L=4$}{L=2 vs. L=4}, Surrogate vs.\ \texttt{QER-Res}, Matched \texttt{Exact-AD})}
+Full $3$-seed factorial controls behind Main Body Figure~\ref{fig:spinglass_diagnosis} are listed in Table~\ref{tab:spinglass_diagnosis}, covering every $40\text{k}$-shot zero-AE arm alongside clean \texttt{Exact-AD} references (\texttt{MSE} + \texttt{FwdOLS} + \texttt{rand08} + Cosine LR).
+
+\begin{table}[h!]
+\centering
+\caption{\textbf{Complete Spin-Glass Factorial Controls ($3$ Seeds, $12$q Zero-AE, $40\text{k}$ Shots Unless Clean \texttt{Exact-AD}; Figure~\ref{fig:spinglass_diagnosis}).}}
+\label{tab:spinglass_diagnosis}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Model / Factorial \& Objective Regime} & \textbf{Intra-Cluster Corr $\uparrow$} & \textbf{Pattern Acc (\%) $\uparrow$} & \textbf{Mode Cov (\%) $\uparrow$} & \textbf{Corr.\ RMSE $\downarrow$} \\
+\midrule
+\texttt{QER-no-zz} / \texttt{chain} / \texttt{grid4} ($L=2, B_c=0.90$, Opt-A) & $-0.008$ to $+0.000$ & $3.3$--$5.5$ & $12.5$--$20.8$ & $0.523$--$0.527$ \\
+\texttt{Adam-SPSA} (MSE / Surr) \& \texttt{Adam-PSR-FD} (\texttt{all}, $L=2$, NISQ) & $+0.012$ / $-0.002$ / $-0.005$ & $0.0$ / $0.6$ / $0.0$ & $0.0$ / $4.2$ / $0.0$ & $0.518$--$0.527$ \\
+\textit{Ref: \texttt{Exact-AD}} ($L=2, B_c=0.90$, MSE / Surr, Clean) & $+0.035$ / $+0.018$ & $8.2 \pm 2.6$ / $39.5 \pm 18.1$ & $37.5$ / $20.8$ & $0.505$ / $0.513$ \\
+\textbf{\texttt{Adam-QER} (\texttt{all}, $L=2, B_c=0.90$, NISQ Opt-A; Table~\ref{tab:pure_qpu})} & $+0.115 \pm 0.017$ & $7.6 \pm 3.0$ & $37.5 \pm 10.2$ & $0.465$ \\
+\texttt{Adam-QER} (\texttt{all}, $L=2, B_c=0.90$, NISQ / Clean $+$ FwdOLS) & $+0.179$ / $+0.209$ & $18.3 \pm 4.5$ / $26.4 \pm 9.0$ & $45.8$ / $50.0$ & $0.436$ / $0.417$ \\
+\midrule
+\texttt{QER-no-zz} ($L=4, B_c=2.0$, NISQ $+$ FwdOLS) & $+0.001 \pm 0.003$ & $1.4 \pm 0.5$ & $16.7 \pm 5.9$ & $0.524$ \\
+\texttt{Adam-SPSA-Surr} ($L=4, B_c=2.0$, NISQ $+$ FwdOLS) & $+0.030 \pm 0.023$ & $11.9 \pm 13.2$ & $8.3 \pm 5.9$ & $0.515$ \\
+\texttt{Adam-QER} ($L=4, B_c=2.0$, NISQ $+$ Opt-A, no FwdOLS) & $+0.265 \pm 0.134$ & $44.1 \pm 19.5$ & $75.0 \pm 20.4$ & $0.391$ \\
+\textbf{\texttt{QER-Res} (Exact MSE Obj., $L=4, B_c=2.0$, NISQ $+$ FwdOLS)} & $+0.688 \pm 0.076$ & $74.8 \pm 4.3$ & $\mathbf{100.0 \pm 0.0}$ & $0.205$ \\
+\textbf{\texttt{Adam-QER} (Surr., $L=4, B_c \in \{0.90, 2.0\}$, NISQ $+$ FwdOLS)} & $+0.569 \pm 0.167$ & $80.2 \pm 9.1$ & $87.5 \pm 17.7$ & $0.266$ \\
+\textbf{\texttt{Adam-QER} (Surr., $L=4, B_c=2.0$, Clean $40\text{k}$ sh, FwdOLS)} & $+0.687 \pm 0.133$ & $89.3 \pm 0.9$ & $\mathbf{100.0 \pm 0.0}$ & $0.207$ \\
+\midrule
+\textit{Ref: \texttt{Exact-AD}} ($L=4$, no FwdOLS, Zero/Const vs.\ Rand08/Cos 200/400) & $+0.365$ / $+0.600$ / $+0.615$ & $44.1$ / $37.6$ / $33.4$ & $62.5$ / $\mathbf{100.0}$ / $\mathbf{100.0}$ & $0.350$ / $0.219$ / $0.215$ \\
+\textit{Ref: \texttt{Exact-AD}} ($L=4$, FwdOLS, Zero/Const $200$ st, Clean MSE) & $+0.672 \pm 0.159$ & $89.8 \pm 4.9$ & $\mathbf{100.0 \pm 0.0}$ & $0.251$ \\
+\textit{Ref: \texttt{Exact-AD}} ($L=4$, FwdOLS, Rand08/Cos $200$ / $400$ st, Clean MSE) & $+0.888$ / $\mathbf{+0.940}$ & $93.9$ / $92.2$ & $\mathbf{100.0 \pm 0.0}$ & $0.108$ / $\mathbf{0.101}$ \\
+\textit{Ref: \texttt{Exact-AD}} ($L=4$, FwdOLS, $B_c{=}0.90$, Rand08/Cos $200$ st, Clean MSE) & $+0.890 \pm 0.051$ & $\mathbf{94.5 \pm 1.2}$ & $\mathbf{100.0 \pm 0.0}$ & $0.112$ \\
+\textit{Ref: \texttt{Exact-AD}} ($L=4$, Surr.\ no-OLS / $+$ FwdOLS, Clean) & $+0.242$ / $+0.439$ & $47.3 \pm 12.8$ / $64.7 \pm 9.1$ & $45.8$ / $54.2$ & $0.410$ / $0.341$ \\
+\textit{Ref: \texttt{ClassicalIsing-EP} (Infinite-Depth Float64 Attractor)} & $+0.939 \pm 0.066$ & $\mathbf{100.0 \pm 0.0}$ & $75.0 \pm 35.4$ & $0.357$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\FloatBarrier
+% ==============================================================================
+\clearpage
+\section{Capacity-vs-Diversity Probes and Hyperparameter Selection Protocol}
+\label{app:capacity}
+\label{app:hparams}
+
+\subsection{Capacity Probes (\texorpdfstring{$P=220 \to 545\text{k}$}{P=220..545k}) and Hybrid \texttt{QERLayer} Pareto}
+The remaining probe data ($P=220 \to 544{,}900$ capacity curves, $10\times$-step and $7.3\times$-noise checks, and the full hybrid noise-dose Pareto plotted in Main Body Figure~\ref{fig:hybrid_qpu_diversity}) are collected in Figure~\ref{fig:capacity_diversity} and Table~\ref{tab:capacity_diversity}.
+
+\begin{figure}[ht!]
+\centering
+\figslot[0.82\linewidth]{analysis/fig_capacity_vs_diversity.pdf}{Four-Panel Capacity vs.\ Diversity Diagnostic (MNIST, 3 Seeds).}
+\caption{\textbf{Diagnosis of $\sim 200$-Param Zero Recall Across $P=220 \to 544{,}900$.}}
+\label{fig:capacity_diversity}
+\end{figure}
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{Complete Capacity vs.\ Diversity, Hybrid \texttt{QERLayer}, Equal-Shot PSR, and Noise-Dose Controls ($3$ Seeds, MNIST $D=12$, $N=2{,}000$).}}
+\label{tab:capacity_diversity}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+\textbf{Model / Control} & \textbf{Params $P$} & \textbf{Optimizer / Sampler} & \textbf{ClfAcc (\%) $\uparrow$} & \textbf{FeatFID $\downarrow$} & \textbf{Prec $\uparrow$} & \textbf{Rec $\uparrow$} & \textbf{Cov / LatStd} \\
+\midrule
+\textit{Real Held-Out Split} & -- & Test ref.\ ($N=2{,}000$) & $98.4$ & $2.8$ & $0.955$ & $0.944$ & $0.969$ / $0.433$ \\
+\textit{Real AE Reconstructions} & $861{,}421$ (frozen) & $12$-d \texttt{ConvLatentAE} ref. & $94.1$ & $51.7$ & $0.987$ & $0.627$ & $0.936$ / $0.433$ \\
+\midrule
+\textbf{\texttt{Adam-QER} (Ours, $5$-seed NISQ)} & $198$ & \texttt{QER-Grad} $\mathcal{O}(1)$, $80\text{k}$ sh & $100.0$ & $185.4$ & $0.996$ & $0.000$ & $0.226$ / $0.095$ \\
+\texttt{Skip-204p} ($2{,}000$ steps, ref) & $204$ & Exact Adam, $\sigma_{\text{step}}=0.35$ & $100.0$ & $194.8$ & $1.000$ & $0.000$ & $0.101$ / $0.048$ \\
+\texttt{ResMLP-h2} ($\sigma_{\text{step}}=0.35 / 1.10$, ref) & $220$ & Exact Adam ($600$ st, bs=$64$) & $93.3$ / $93.4$ & $332.2$ / $300.0$ & $0.985$ / $0.981$ & $0.000$ & $0.036$--$0.070$ / $0.020$--$0.056$ \\
+\texttt{ResMLP-h12 / h48} ($\sigma_{\text{step}}=0.85$, ref) & $900$ / $6{,}660$ & Exact Adam ($600$ st, bs=$64$) & $99.9$ / $100.0$ & $144.3$ / $87.6$ & $0.999$ & $0.001$ / $0.026$ & $0.288$--$0.560$ / $0.121$--$0.209$ \\
+\texttt{ResMLP-h128} ($\sigma_{\text{step}}=0.85 / 1.10$, ref) & $38{,}020$ & Exact Adam ($600$ st, bs=$64$) & $99.7$ / $98.8$ & $65.7$ / $70.3$ & $0.997$ / $0.989$ & $0.174$ / $0.278$ & $0.779$--$0.814$ / $0.292$--$0.327$ \\
+\texttt{ResMLP-h256 / h512} ($\sigma_{\text{step}}=0.85$, ref) & $141\text{k}$ / $545\text{k}$ & Exact Adam ($600$ st, bs=$64$) & $99.3$ / $99.2$ & $68.3$ / $66.9$ & $0.994$ / $0.993$ & $0.230$ / $0.246$ & $0.807$--$0.821$ / $0.306$--$0.308$ \\
+\midrule
+\texttt{HybridExactAD-h48} ($\sigma{=}0.85$, Clean Eval) & $6{,}618$ & Clean Exact-AD QPU (no skip) & $99.8 \pm 0.1$ & $94.8 \pm 2.7$ & $0.996$ & $0.067 \pm 0.013$ & $0.580$ / $0.215$ \\
+\texttt{HybridExactAD-h48} (NISQ24, $\sigma{=}0.35 / 0.85$) & $6{,}618$ & Clean train $\to$ $24$sh NISQ eval & $88.5$ / $81.4$ & $120.7$ / $151.7$ & $0.960$ / $0.942$ & $0.308$ / $0.403$ & $0.659$ / $0.350$ \\
+\texttt{HybridExactAD-h128} ($\sigma{=}0.85$, Clean Eval) & $37{,}978$ & Clean Exact-AD QPU (no skip) & $99.7 \pm 0.1$ & $96.9 \pm 1.0$ & $0.996$ & $0.081 \pm 0.007$ & $0.635$ / $0.237$ \\
+\texttt{HybridExactAD-h128} (NISQ24, $\sigma{=}0.35 / 0.85$) & $37{,}978$ & Clean train $\to$ $24$sh NISQ eval & $84.7$ / $79.5$ & $153.4$ / $161.7$ & $0.954$ / $0.940$ & $0.350$ / $0.437$ & $0.657$ / $0.360$ \\
+\texttt{HybridPSR-h48} ($24$sh/$18$st, $\sigma{=}0.35 / 0.85$) & $6{,}540$ {\scriptsize(+78)} & Equal-shot PSR on $12$ fields & $35.4$ / $25.9$ & $315.1$ / $275.7$ & $0.904$ / $0.888$ & $0.360$ / $0.485$ & $0.359$--$0.388$ / $0.372$--$0.440$ \\
+\texttt{HybridPSR-h48} ($4$sh/$100$st, $\sigma{=}0.35 / 0.85$) & $6{,}540$ {\scriptsize(+78)} & Equal-shot PSR on $12$ fields & $88.8$ / $76.1$ & $108.0$ / $139.3$ & $0.955$ / $0.925$ & $0.320$ / $0.431$ & $0.649$--$0.629$ / $0.326$--$0.380$ \\
+\texttt{Classical+Noise-h48} ($24$/$12$/$6$/$4$sh, $\sigma{=}0.85$) & $6{,}840$ & Exact Adam + binom.\ noise & $99.2$--$85.4$ & $84.0$--$65.9$ & $0.994$--$0.935$ & $0.133$ / $0.312$ / $0.540$ / $0.637$ & $0.653$--$0.766$ / $0.443$ \\
+\texttt{Classical+Noise-h128} ($24$/$12$/$6$/$4$sh, $\sigma{=}0.85$) & $38{,}200$ & Exact Adam + binom.\ noise & $98.6$--$85.8$ & $78.0$--$65.1$ & $0.991$--$0.933$ & $0.240$ / $0.407$ / $0.593$ / $0.677$ & $0.735$--$0.791$ / $0.463$ \\
+\midrule
+\textbf{\texttt{HybridResMLPQER-h48}} ($\sigma{=}0.35 / 0.85$) & $6{,}618$ & \texttt{QERLayer} VJP ($24$ NISQ sh) & $95.5$ / $89.7$ & $\mathbf{72.0}$ / $89.5$ & $0.976$ / $0.961$ & $0.326$ / $0.428$ & $0.698$--$0.726$ / $0.316$--$0.360$ \\
+\textbf{\texttt{HybridResMLPQER-h128}} ($\sigma{=}0.35 / 0.85$) & $37{,}978$ & \texttt{QERLayer} VJP ($24$ NISQ sh) & $94.1$ / $88.7$ & $81.7$ / $94.6$ & $0.972$ / $0.954$ & $0.353$ / $\mathbf{0.476}$ & $0.728$--$0.751$ / $0.325$--$0.372$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\FloatBarrier
+\subsection{Hyperparameter Configuration and Selection Protocol}
+Table~\ref{tab:hparams} summarizes the fixed physical schedule, perturbation radius, \texttt{StabilizedAdam} parameters, baseline tuning grids, and readout calibration choices shared across all experiments.
+
+\begin{table}[ht!]
+\centering
+\caption{\textbf{Hyperparameter Configuration and Selection Protocol Across All Experiments.}}
+\label{tab:hparams}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Module / Component} & \textbf{Parameter \& Value} & \textbf{Selection Basis / Protocol} \\
+\midrule
+Diffusion Schedule & $T{=}4$, \texttt{cosine}, $\bar{\alpha}_t \in [0.02, 0.98]$, $\sigma_{\text{diff}}{=}0.70$, $\sigma_{\text{step}}{=}0.70$ (cont.) / $0.30$--$0.35$ (disc.) & Fixed short-horizon NISQ schedule; $\sigma_{\text{step}}$ matched to forward noise or discrete readout. \\
+Ising Circuit Ansatz & $L{=}2$ (vision) / $L{=}3$ (lbl-q) / $L{=}4$ (spin glass), $\Delta t{=}0.42, \beta_{\text{temp}}{=}1.25, s_{\text{shake}}{=}2.2, f_{\text{fin}}{=}0.70$ & Fixed physical Hamiltonian gains from small pilot checks; kept identical across all optimizers. \\
+Perturbation Radius & $\beta_0{=}0.45$, $\beta_{\min}{=}0.15$, centered, \texttt{auto\_beta\_guard} & Chosen in linear-response regime ($\approx 0.45\text{ rad} < \pi/2$) trading $\mathcal{O}(\beta^2)$ bias vs.\ $(2\beta)^{-2}$ shot SNR. \\
+\texttt{StabilizedAdam} & $\alpha_{\max}{=}0.12 \to \alpha_{\min}{=}0.015$, $(\beta_1,\beta_2){=}(0.75, 0.98)$, $\eta_w{=}0.01$, $B_c{=}0.90$ ($2.0$ at $L{=}4$) & $B_c=0.90$ prevents $R_Z(B_c g_L^{\text{mold}})$ $\pi$-wraparound; $\alpha_{\max}=0.12$ validated via $0.04\to 0.50$ sweeps. \\
+SPSA / PSR Controls & Standard SPSA $(\mathrm{lr}{=}0.08, c_0{=}0.18)$ + $3{\times}3$ grid $(\{0.04,0.12,0.25\}\times\{0.10,0.22,0.40\})$ & Best tuned $3{\times}3$ grid SPSA ($22.7\%$) reported alongside standard and \texttt{QN-SPSA-CR}. \\
+Readout Calibration & Option A $(g_0{=}1.0, \text{EMA}{=}0.0)$ cont.; Discrete $(g_0{=}0.75, \text{EMA}{=}0.10)$ & Follows Proposition~\ref{prop:dilution} analysis; inverse OLS checked up to $[0.2, 2.0]$ clip bounds. \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{figure}[ht!]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  qnode/.style={circle, draw=qerblue!85!black, fill=slotbg, inner sep=0pt, minimum size=4.2mm, font=\scriptsize},
+  eall/.style={draw=qerblue!35, thin},
+  eg8/.style={draw=qergreen!70!black, semithick},
+  eg4/.style={draw=qerorange!85!black, semithick},
+  echain/.style={draw=qerred!85!black, thick},
+  ptitle/.style={font=\small\bfseries}
+]
+  % 1. chain (11 edges)
+  \begin{scope}[xshift=0cm]
+    \node[ptitle] at (1.05, 1.95) {\texttt{chain} ($|E|{=}11$)};
+    \foreach \r in {0,1,2} \foreach \c in {0,1,2,3} {
+      \pgfmathtruncatemacro{\idx}{\r*4+\c}
+      \node[qnode] (ch\idx) at (\c*0.7, {(2-\r)*0.68}) {\idx};
+    }
+    \begin{pgfonlayer}{background}
+      \foreach \i [evaluate=\i as \j using int(\i+1)] in {0,...,10} {
+        \draw[echain] (ch\i) -- (ch\j);
+      }
+    \end{pgfonlayer}
+  \end{scope}
+  % 2. grid4 (17 edges)
+  \begin{scope}[xshift=3.45cm]
+    \node[ptitle] at (1.05, 1.95) {\texttt{grid4} ($|E|{=}17$)};
+    \foreach \r in {0,1,2} \foreach \c in {0,1,2,3} {
+      \pgfmathtruncatemacro{\idx}{\r*4+\c}
+      \node[qnode] (g4\idx) at (\c*0.7, {(2-\r)*0.68}) {\idx};
+    }
+    \begin{pgfonlayer}{background}
+      \foreach \r in {0,1,2} \foreach \c in {0,1,2} {
+        \pgfmathtruncatemacro{\u}{\r*4+\c} \pgfmathtruncatemacro{\v}{\r*4+\c+1}
+        \draw[eg4] (g4\u) -- (g4\v);
+      }
+      \foreach \r in {0,1} \foreach \c in {0,1,2,3} {
+        \pgfmathtruncatemacro{\u}{\r*4+\c} \pgfmathtruncatemacro{\v}{(\r+1)*4+\c}
+        \draw[eg4] (g4\u) -- (g4\v);
+      }
+    \end{pgfonlayer}
+  \end{scope}
+  % 3. grid8 (29 edges)
+  \begin{scope}[xshift=6.90cm]
+    \node[ptitle] at (1.05, 1.95) {\texttt{grid8} ($|E|{=}29$)};
+    \foreach \r in {0,1,2} \foreach \c in {0,1,2,3} {
+      \pgfmathtruncatemacro{\idx}{\r*4+\c}
+      \node[qnode] (g8\idx) at (\c*0.7, {(2-\r)*0.68}) {\idx};
+    }
+    \begin{pgfonlayer}{background}
+      \foreach \r in {0,1,2} \foreach \c in {0,1,2} {
+        \pgfmathtruncatemacro{\u}{\r*4+\c} \pgfmathtruncatemacro{\v}{\r*4+\c+1}
+        \draw[eg8] (g8\u) -- (g8\v);
+      }
+      \foreach \r in {0,1} \foreach \c in {0,1,2,3} {
+        \pgfmathtruncatemacro{\u}{\r*4+\c} \pgfmathtruncatemacro{\v}{(\r+1)*4+\c}
+        \draw[eg8] (g8\u) -- (g8\v);
+      }
+      \foreach \r in {0,1} \foreach \c in {0,1,2} {
+        \pgfmathtruncatemacro{\u}{\r*4+\c} \pgfmathtruncatemacro{\v}{(\r+1)*4+\c+1}
+        \draw[eg8] (g8\u) -- (g8\v);
+        \pgfmathtruncatemacro{\u}{\r*4+\c+1} \pgfmathtruncatemacro{\v}{(\r+1)*4+\c}
+        \draw[eg8] (g8\u) -- (g8\v);
+      }
+    \end{pgfonlayer}
+  \end{scope}
+  % 4. all (66 edges)
+  \begin{scope}[xshift=10.35cm]
+    \node[ptitle] at (1.05, 1.95) {\texttt{all} ($|E|{=}66$)};
+    \foreach \r in {0,1,2} \foreach \c in {0,1,2,3} {
+      \pgfmathtruncatemacro{\idx}{\r*4+\c}
+      \node[qnode] (al\idx) at (\c*0.7, {(2-\r)*0.68}) {\idx};
+    }
+    \begin{pgfonlayer}{background}
+      \foreach \i in {0,...,10} {
+        \pgfmathtruncatemacro{\st}{\i+1}
+        \foreach \j in {\st,...,11} {
+          \draw[eall] (al\i) -- (al\j);
+        }
+      }
+    \end{pgfonlayer}
+  \end{scope}
+\end{tikzpicture}%
+}
+\caption{\textbf{Visible-Register Ising Coupling Topologies on a $3{\times}4$ ($12$-Qubit) Lattice.} Sparse hardware connectivity (\texttt{chain}, \texttt{grid4}, \texttt{grid8}) trades fewer two-qubit $ZZ$ gates against global correlation capacity provided by all-to-all coupling (\texttt{all}).}
+\label{fig:topologies}
+\end{figure}
+
+\end{document}

@@ -1,0 +1,65 @@
+# ==============================================================================
+# QERD Project .gitignore
+# Keeps source code, downloader scripts, paper TeX/PDF, and curated result JSON/figures clean while
+# ignoring downloaded datasets, model checkpoints, superseded dev artifacts, caches, and OS files.
+# ==============================================================================
+
+# ---- Python & Packaging ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+develop-eggs/
+eggs/
+.eggs/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+
+# ---- Virtual Environments & Testing ----
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# ---- Downloaded Datasets & Model Checkpoints ----
+data/
+*.pt
+*.pth
+*.ckpt
+*.npz
+
+# ---- LaTeX Temporary Build Artifacts ----
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.nav
+*.out
+*.snm
+*.synctex.gz
+*.toc
+*.vrb
+
+# ---- Notebooks, Environment Secrets, IDEs & OS Noise ----
+.ipynb_checkpoints/
+.env
+.env.*
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini

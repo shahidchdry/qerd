@@ -1,0 +1,256 @@
+{
+  "config": {
+    "mode": "ibm_qpu",
+    "device": "ibm_kingston",
+    "instance": "",
+    "api_key_json": "<provided>",
+    "execution_mode": "job",
+    "n_qubits": 128,
+    "n_layers": 4,
+    "diffusion_steps": 4,
+    "batches": 17,
+    "batch_size": 24,
+    "shots_per_run": 48,
+    "eval_samples": 32,
+    "eval_shots": 96,
+    "cal_mode": "inverse",
+    "nudge_mode": "residual",
+    "sample_temp": 1.15,
+    "readout_mitigation": true,
+    "run_live_spsa": false,
+    "skip_untrained": true,
+    "max_sim_qubits": 14,
+    "skip_scaling": false,
+    "risk_aversion": 2.5,
+    "card_penalty": 0.35,
+    "qpu_shots_per_sec": 4000.0,
+    "csv_path": "C:\\Users\\topsy\\OneDrive\\Documents\\optimizer-qpu\\data\\sp500_real\\daily_returns.csv",
+    "split_date": "2022-01-01",
+    "ckpt_dir": "C:\\Users\\topsy\\OneDrive\\Documents\\optimizer-qpu\\projects\\sp500_qubo_and_spinglass\\checkpoints",
+    "artifact_dir": "C:\\Users\\topsy\\OneDrive\\Documents\\optimizer-qpu\\projects\\sp500_qubo_and_spinglass\\artifacts",
+    "seed": 42
+  },
+  "heron_r2_audits": [
+    {
+      "device": "ibm_kingston",
+      "num_qubits": 156,
+      "native_edges": 176,
+      "edge_colors": 3,
+      "n_qerd_params": 332,
+      "transpiled_depth": 70,
+      "native_2q_gates": 704,
+      "transpile_sec": 0.049639199998637196,
+      "med_2q_err_pct": 0.18277333407478724,
+      "p90_2q_err_pct": 0.8630936814976861,
+      "bad_2q_couplers_gt2pct": 24,
+      "med_ro_err_pct": 0.9521484375,
+      "p90_ro_err_pct": 5.1025390625,
+      "bad_ro_qubits_gt5pct": 16,
+      "med_t1_us": 282.8207987984761,
+      "med_t2_us": 144.22948834636003
+    },
+    {
+      "device": "ibm_marrakesh",
+      "num_qubits": 156,
+      "native_edges": 176,
+      "edge_colors": 3,
+      "n_qerd_params": 332,
+      "transpiled_depth": 70,
+      "native_2q_gates": 704,
+      "transpile_sec": 0.020411299999977928,
+      "med_2q_err_pct": 0.3294753646418097,
+      "p90_2q_err_pct": 4.474161994091048,
+      "bad_2q_couplers_gt2pct": 40,
+      "med_ro_err_pct": 0.9521484375,
+      "p90_ro_err_pct": 5.74951171875,
+      "bad_ro_qubits_gt5pct": 19,
+      "med_t1_us": 197.35837603822844,
+      "med_t2_us": 118.42625980898686
+    },
+    {
+      "device": "ibm_fez",
+      "num_qubits": 156,
+      "native_edges": 176,
+      "edge_colors": 3,
+      "n_qerd_params": 332,
+      "transpiled_depth": 70,
+      "native_2q_gates": 704,
+      "transpile_sec": 0.02071060000162106,
+      "med_2q_err_pct": 0.39033828523107883,
+      "p90_2q_err_pct": 1.4281128462771122,
+      "bad_2q_couplers_gt2pct": 22,
+      "med_ro_err_pct": 0.7568359375,
+      "p90_ro_err_pct": 2.67333984375,
+      "bad_ro_qubits_gt5pct": 8,
+      "med_t1_us": 144.85526609546145,
+      "med_t2_us": 87.95068681159161
+    }
+  ],
+  "heron_156q_projection": {
+    "n_qubits": 128,
+    "n_params": 263,
+    "qerd_shots": 39168,
+    "qerd_qpu_pulse_sec": 9.792,
+    "qerd_session_wall_est_min": 1.5798666666666668,
+    "psr_equal_steps_shots": 10301184,
+    "psr_equal_steps_pulse_sec": 2575.296,
+    "psr_equal_shots_steps": 1,
+    "circuit_compression_x": 263
+  },
+  "t4_simulation_wall": [
+    {
+      "n_qubits": 8,
+      "hilbert_dim": 256,
+      "n_params": 18,
+      "batch_ms": 38.1485000034445,
+      "sv_mb_single": 0.001953125,
+      "sv_mb_noisy_batch": 0.15625,
+      "qerd_circs_per_sample": 2,
+      "psr_circs_per_sample": 36
+    },
+    {
+      "n_qubits": 10,
+      "hilbert_dim": 1024,
+      "n_params": 23,
+      "batch_ms": 69.757600002049,
+      "sv_mb_single": 0.0078125,
+      "sv_mb_noisy_batch": 0.625,
+      "qerd_circs_per_sample": 2,
+      "psr_circs_per_sample": 46
+    },
+    {
+      "n_qubits": 12,
+      "hilbert_dim": 4096,
+      "n_params": 29,
+      "batch_ms": 291.9852000050014,
+      "sv_mb_single": 0.03125,
+      "sv_mb_noisy_batch": 2.5,
+      "qerd_circs_per_sample": 2,
+      "psr_circs_per_sample": 58
+    },
+    {
+      "n_qubits": 14,
+      "hilbert_dim": 16384,
+      "n_params": 33,
+      "batch_ms": 1653.0133999985992,
+      "sv_mb_single": 0.125,
+      "sv_mb_noisy_batch": 10.0,
+      "qerd_circs_per_sample": 2,
+      "psr_circs_per_sample": 66
+    }
+  ],
+  "sp500_minvar_qubo": {
+    "sa_ceiling": {
+      "mean_qubo_cost": -0.08282531676956767,
+      "best_qubo_cost": -0.11115382997906448,
+      "gap_closed_pct": 100.00000000000001,
+      "oos_mean_vol_pct": 14.893017717114388,
+      "oos_ens_vol_pct": 14.292220035946363,
+      "oos_ens_ret_pct": 14.693651682245132,
+      "oos_ens_profit_usd": 6852.260292493465,
+      "oos_ens_sharpe": 1.0280874241572777,
+      "unique_frac": 1.0
+    },
+    "untrained_baseline": {
+      "mean_qubo_cost": -0.05719259483245003,
+      "best_qubo_cost": -0.09642387504042278,
+      "gap_closed_pct": 0.0,
+      "oos_mean_vol_pct": 15.913612244381845,
+      "oos_ens_vol_pct": 15.358672008046526,
+      "oos_ens_ret_pct": 15.215606721234092,
+      "oos_ens_profit_usd": 7087.707086707305,
+      "oos_ens_sharpe": 0.9906850483728359,
+      "unique_frac": 1.0
+    },
+    "buy_hold_1N": {
+      "mean_qubo_cost": 0.02654481281655588,
+      "best_qubo_cost": 0.02654481281655588,
+      "gap_closed_pct": -326.681683882153,
+      "oos_mean_vol_pct": 14.98104732541602,
+      "oos_ens_vol_pct": 14.98104732541602,
+      "oos_ens_ret_pct": 14.758722816268191,
+      "oos_ens_profit_usd": 6829.065537863182,
+      "oos_ens_sharpe": 0.9851596150577107,
+      "unique_frac": 1.0
+    },
+    "greedy_minvar": {
+      "mean_qubo_cost": -0.07260912801971864,
+      "best_qubo_cost": -0.07260912801971864,
+      "gap_closed_pct": 60.143956717076506,
+      "oos_mean_vol_pct": 11.367460878249688,
+      "oos_ens_vol_pct": 11.36746087824969,
+      "oos_ens_ret_pct": 10.522335377338878,
+      "oos_ens_profit_usd": 4578.740340783228,
+      "oos_ens_sharpe": 0.9256539776153653,
+      "unique_frac": 1.0
+    },
+    "qerd_qpu": {
+      "mean_qubo_cost": -0.09445253565760497,
+      "best_qubo_cost": -0.10820351580391109,
+      "gap_closed_pct": 145.36084352087647,
+      "oos_mean_vol_pct": 14.439573239346071,
+      "oos_ens_vol_pct": 13.964466168422051,
+      "oos_ens_ret_pct": 14.10375661401676,
+      "oos_ens_profit_usd": 6506.311926395527,
+      "oos_ens_sharpe": 1.0099746344697147,
+      "unique_frac": 1.0,
+      "wall_sec": 226.19130840000435,
+      "nudge_align": 0.6372169232594159,
+      "mean_gain": 0.7799283907525388,
+      "shots_used": 38016.0
+    }
+  },
+  "heavy_hex_spinglass": {
+    "sa_ceiling": {
+      "mean_energy": -123.78125,
+      "best_energy": -129.0,
+      "satisfied_bonds_pct": 95.8449074074074,
+      "gap_closed_pct": 100.0,
+      "unique_frac": 1.0
+    },
+    "untrained_baseline": {
+      "mean_energy": -0.3125,
+      "best_energy": -11.0,
+      "satisfied_bonds_pct": 50.11574074074075,
+      "gap_closed_pct": 0.0,
+      "unique_frac": 1.0
+    },
+    "qerd_qpu": {
+      "mean_energy": -89.0625,
+      "best_energy": -103.0,
+      "satisfied_bonds_pct": 82.98611111111111,
+      "gap_closed_pct": 71.88053657301948,
+      "unique_frac": 1.0,
+      "wall_sec": 1163.2191493999999,
+      "nudge_align": 0.761512415452922,
+      "mean_gain": 0.6655516155303876,
+      "shots_used": 38016.0
+    }
+  },
+  "subgraph_audits": {
+    "minvar": {
+      "device": "ibm_kingston",
+      "n_qubits": 32,
+      "native_edges": 31,
+      "edge_colors": 3,
+      "med_ro_err_pct": 0.8056640625,
+      "p90_ro_err_pct": 2.3730468750000004,
+      "bad_ro_gt5pct": 0,
+      "med_cz_err_pct": 0.16179233040090335,
+      "p90_cz_err_pct": 0.24684338010654006,
+      "bad_cz_gt2pct": 0
+    },
+    "spinglass": {
+      "device": "ibm_kingston",
+      "n_qubits": 128,
+      "native_edges": 135,
+      "edge_colors": 4,
+      "med_ro_err_pct": 1.025390625,
+      "p90_ro_err_pct": 2.4560546875,
+      "bad_ro_gt5pct": 0,
+      "med_cz_err_pct": 0.1786658668930824,
+      "p90_cz_err_pct": 0.5914995690233473,
+      "bad_cz_gt2pct": 3
+    }
+  }
+}
