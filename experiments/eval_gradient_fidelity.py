@@ -510,7 +510,7 @@ def make_proof_figure(results: Dict[str, Any], out_dir: str) -> None:
     ax.set_ylabel("Cosine Alignment $\\cos(\\hat{g}_{\\mathrm{QER}}, \\cdot)$")
     ax.set_title("(a) Objective Identity: QER Tracks $x_0^\\top z$ (+0.25..+1.00 on ZZ)")
     ax.grid(True, linestyle="--", alpha=0.25)
-    ax.legend(frameon=True, facecolor="white", framealpha=0.92, loc="lower left")
+    ax.legend(frameon=True, facecolor="white", framealpha=0.92, loc="lower right")
 
     # Panel (b): Residual Nudge (x0 - z_free) Eliminates ZZ Dip
     ax = axes[0, 1]

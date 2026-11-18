@@ -995,14 +995,15 @@ def _plot_grad_alignment(plt: Any, bundle: Dict[str, Any], fig_dir: str) -> Opti
         for y_key, lbl, col, fmt in curves:
             ax.plot(xs, [r[y_key] for r in rows], fmt, color=col, linewidth=1.8, markersize=4.8, label=lbl)
         ax.axhline(0.0, color="#666666", linestyle="-", linewidth=0.7, alpha=0.5)
-        ax.set_ylim(-0.1, 1.08)
+        ax.set_ylim(-0.44, 1.08)
         ax.set_title(title)
         ax.set_xlabel(xlabel)
         ax.grid(True, linestyle="--", alpha=0.25)
     axes[0].set_ylabel("Cosine Similarity $\\cos(\\hat{g}_{\\mathrm{QER}}, \\cdot)$")
-    axes[0].legend(frameon=False, loc="lower left", fontsize=7.2)
-    fig.suptitle(f"Proposition 1 Empirical Validation: Local-Response Gradient Fidelity ({gs['dataset'].upper()})", fontsize=11.0, fontweight="bold", y=1.03)
-    fig.tight_layout()
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.suptitle(f"Proposition 1 Empirical Validation: Local-Response Gradient Fidelity ({gs['dataset'].upper()})", fontsize=11.0, fontweight="bold", y=1.01)
+    fig.legend(handles, labels, loc="upper center", ncol=len(labels), frameon=False, bbox_to_anchor=(0.5, 0.945), fontsize=8.4)
+    fig.tight_layout(rect=[0, 0, 1, 0.87])
     return _save_fig(plt, fig, fig_dir, "fig_grad_alignment")
 
 

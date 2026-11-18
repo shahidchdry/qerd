@@ -53,6 +53,7 @@ data/
 *.vrb
 
 # ---- Notebooks, Environment Secrets, IDEs & OS Noise ----
+*.tar.gz
 .ipynb_checkpoints/
 .env
 .env.*
