@@ -52,6 +52,7 @@ from .solvers import (  # noqa: E402
     sample_classical_dinuc_baseline,
     sample_dna_batch,
     save_dna_checkpoint,
+    train_coord_psr_dna,
     train_psr_dna,
     train_qerd_dna,
     train_spsa_dna,
@@ -72,20 +73,28 @@ def _clear_dir_files(folder: str, keep_names: Tuple[str, ...] = ()) -> int:
     return removed
 
 
-def _filter_valid_targets(seqs: List[str], probs: np.ndarray, min_prob: float = 0.68) -> List[str]:
-    """Keep high-confidence promoters that satisfy all biophysical validity rules."""
+def _filter_valid_targets(
+    seqs: List[str],
+    probs: np.ndarray,
+    min_prob: float = 0.68,
+    cond_mode: str = "any",
+) -> List[str]:
+    """Keep high-confidence promoters that satisfy class-matched biophysical & motif rules."""
     valid_top: List[str] = []
     prob_top: List[str] = []
+    # TATA-box promoters are naturally AT-rich around -30; avoid high-GC thermodynamic bias that erases TATA boxes.
+    gc_lo, gc_hi = (32.0, 68.0) if cond_mode == "tata" else (42.0, 80.0)
+    dg_max = -74.0 if cond_mode == "tata" else -86.0
     for s, p in sorted(zip(seqs, probs), key=lambda z: -float(z[1])):
         if float(p) < min_prob:
             continue
         prob_top.append(s)
-        if (
-            42.0 <= gc_percent(s) <= 80.0
-            and compute_santalucia_dg37(s) <= -86.0
-            and max_homopolymer_run(s) <= 5
-            and (has_tss_initiator(s) or has_upstream_promoter_box(s, "any"))
-        ):
+        box_ok = (
+            has_upstream_promoter_box(s, "tata")
+            if cond_mode == "tata"
+            else (has_tss_initiator(s) or has_upstream_promoter_box(s, "nontata"))
+        )
+        if gc_lo <= gc_percent(s) <= gc_hi and compute_santalucia_dg37(s) <= dg_max and max_homopolymer_run(s) <= 5 and box_ok:
             valid_top.append(s)
     return valid_top if len(valid_top) >= 64 else prob_top
 
@@ -97,7 +106,7 @@ def _prepare_training_targets(
     max_targets: int,
     seed: int,
 ) -> Tuple[np.ndarray, np.ndarray, List[str], List[str]]:
-    """Build balanced conditional training set: 50% TATA (`[+1,-1]`) + 50% Non-TATA/GC (`[-1,+1]`)."""
+    """Build balanced conditional training set: 50% TATA (`[1,0]`) + 50% Non-TATA/GC (`[0,1]`)."""
     rng = np.random.default_rng(seed)
     tata_seqs = list(ds.train_tata_pos)
     nontata_seqs = list(ds.train_nontata_pos)
@@ -105,8 +114,8 @@ def _prepare_training_targets(
     if oracle_model is not None:
         pt = predict_oracle_probs(oracle_model, tata_seqs[:4000])
         pn = predict_oracle_probs(oracle_model, nontata_seqs[:4000])
-        top_t = _filter_valid_targets(tata_seqs[:4000], pt, min_prob=0.68)
-        top_n = _filter_valid_targets(nontata_seqs[:4000], pn, min_prob=0.68)
+        top_t = _filter_valid_targets(tata_seqs[:4000], pt, min_prob=0.68, cond_mode="tata")
+        top_n = _filter_valid_targets(nontata_seqs[:4000], pn, min_prob=0.68, cond_mode="nontata")
         if len(top_t) >= 64:
             tata_seqs = top_t
         if len(top_n) >= 64:
@@ -118,8 +127,8 @@ def _prepare_training_targets(
 
     chosen_seqs = pick_t + pick_n
     cond_tr = np.vstack([
-        np.tile(np.array([1.0, -1.0]), (half, 1)),
-        np.tile(np.array([-1.0, 1.0]), (half, 1)),
+        np.tile(np.array([1.0, 0.0]), (half, 1)),
+        np.tile(np.array([0.0, 1.0]), (half, 1)),
     ])
     tags = ["tata"] * half + ["nontata"] * half
 
@@ -135,8 +144,8 @@ def _eval_cond_vectors(n_samples: int) -> Tuple[np.ndarray, List[str]]:
     half = n_samples // 2
     rem = n_samples - half
     c = np.vstack([
-        np.tile(np.array([1.0, -1.0]), (half, 1)),
-        np.tile(np.array([-1.0, 1.0]), (rem, 1)),
+        np.tile(np.array([1.0, 0.0]), (half, 1)),
+        np.tile(np.array([0.0, 1.0]), (rem, 1)),
     ])
     return c, ["tata"] * half + ["nontata"] * rem
 
@@ -227,6 +236,14 @@ def run_benchmark(cfg: RunConfig, clear_outputs: bool = False) -> None:
         seqs_store[key] = seqs
 
     _record("real_promoters", real_eval_seqs_show, tags=eval_tags[: len(real_eval_seqs_show)])
+    if not is_core8:
+        pt_te = predict_oracle_probs(oracle_model, ds.test_tata_pos[:400])
+        pn_te = predict_oracle_probs(oracle_model, ds.test_nontata_pos[:400])
+        ft_te = _filter_valid_targets(ds.test_tata_pos[:400], pt_te, min_prob=0.68, cond_mode="tata")
+        fn_te = _filter_valid_targets(ds.test_nontata_pos[:400], pn_te, min_prob=0.68, cond_mode="nontata")
+        filt_eval = ft_te[: cfg.eval_samples // 2] + fn_te[: cfg.eval_samples - cfg.eval_samples // 2]
+        if len(filt_eval) == cfg.eval_samples:
+            _record("real_promoters_filtered", filt_eval, tags=eval_tags)
     cl_seqs = sample_classical_dinuc_baseline(
         [s[18:22] + s[47:51] for s in chosen_train_seqs] if is_core8 else chosen_train_seqs,
         n_samples=cfg.eval_samples,
@@ -303,16 +320,56 @@ def run_benchmark(cfg: RunConfig, clear_outputs: bool = False) -> None:
             _record("psr_qpu", pr_seqs, tags=eval_tags)
             comp["psr_qpu"]["steps_executed"] = float(psr_info["steps"])
 
+        with QuantumIsingDenoiser(
+            data_shape=cfg.n_qubits, cond_dim=2, edges=edges, n_layers=cfg.n_layers,
+            diffusion_steps=cfg.diffusion_steps, cal_mode=cfg.cal_mode,
+            init_gain=0.75, gain_ema=0.10, gain_bounds=(0.40, 1.00), seed=cfg.seed, **model_kw,
+        ) as cpsr_m:
+            cpsr_info = train_coord_psr_dna(
+                cpsr_m, x_tr, cond_tr, max_shots=cfg.max_shots, shots_per_shift=4,
+                coords_per_step=min(8, max(2, cpsr_m.n_qpu_params // 4)), ro_cal=ro_cal,
+            )
+            cpr_spins = sample_dna_batch(
+                cpsr_m, eval_conds, cfg.eval_samples, shots_per_step=cfg.eval_shots,
+                sample_temp=cfg.sample_temp, stochastic_decode=cfg.stochastic_decode, ro_cal=ro_cal,
+            )
+            cpr_seqs = spins_to_core8(cpr_spins) if is_core8 else spins_to_seqs(cpr_spins)
+            _record("coord_psr_qpu", cpr_seqs, tags=eval_tags)
+            comp["coord_psr_qpu"]["steps_executed"] = float(cpsr_info["steps"])
+
+    run_nozz = (cfg.mode == "local_sim") or (is_live_qpu and cfg.run_live_nozz)
+    if run_nozz:
+        with QuantumIsingDenoiser(
+            data_shape=cfg.n_qubits, cond_dim=2, edges=[], n_layers=cfg.n_layers,
+            diffusion_steps=cfg.diffusion_steps, cal_mode=cfg.cal_mode,
+            init_gain=0.75, gain_ema=0.10, gain_bounds=(0.40, 1.00), seed=cfg.seed, **model_kw,
+        ) as nozz_m:
+            if is_live_qpu:
+                print(f"[No-ZZ Ablation] Training zero-ZZ QPU control ({cfg.max_shots:,} shots) on {cfg.device}...", flush=True)
+            train_qerd_dna(
+                nozz_m, x_tr, cond_tr, max_shots=cfg.max_shots, shots_per_run=cfg.shots_per_run,
+                batch_size=cfg.batch_size, nudge_mode=cfg.nudge_mode, ro_cal=ro_cal, verbose=is_live_qpu,
+            )
+            nz_spins = sample_dna_batch(
+                nozz_m, eval_conds, cfg.eval_samples, shots_per_step=cfg.eval_shots,
+                sample_temp=cfg.sample_temp, stochastic_decode=cfg.stochastic_decode, ro_cal=ro_cal,
+            )
+            nz_seqs = spins_to_core8(nz_spins) if is_core8 else spins_to_seqs(nz_spins)
+            _record("nozz_qpu", nz_seqs, tags=eval_tags)
+
     print(f"\n[Part B] Human Promoter DNA Design Results ({cfg.n_qubits}q / {cfg.seq_len} bp, {cfg.max_shots:,} shots):")
     print(f"  {'Model':<18} | {'Activity ↑':>10} | {'Valid % ↑':>9} | {'Inr TSS ↑':>9} | {'GC %':>6} | {'dG37 ↓':>8} | {'Uniq %':>7} | {'Novel %':>7}")
     print("  " + "-" * 94)
     for k, lbl in [
         ("untrained_qpu", "Untrained QPU"),
+        ("nozz_qpu", "QERD no-zz (0 ZZ)"),
         ("psr_qpu", "Equal-Shot PSR"),
+        ("coord_psr_qpu", "Coord-PSR (4sh)"),
         ("spsa_qpu", "Equal-Shot SPSA"),
         ("classical_markov", "Classical Markov"),
         ("qerd_qpu", "QERD QPU (Ours)"),
         ("real_promoters", "Real Human DNA"),
+        ("real_promoters_filtered", "Real DNA (Filt.)"),
     ]:
         if k in comp:
             m = comp[k]
@@ -414,6 +471,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser.add_argument("--nudge-mode", choices=["residual", "target"], default=None)
     parser.add_argument("--skip-scaling", action="store_true")
     parser.add_argument("--skip-live-spsa", action="store_true")
+    parser.add_argument("--skip-live-nozz", action="store_true")
     parser.add_argument("--artifact-dir", type=str, default=None)
     parser.add_argument("--ckpt-dir", type=str, default=None)
     parser.add_argument("--fetch-data", action="store_true")
@@ -434,6 +492,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         nudge_mode=args.nudge_mode,
         skip_scaling=True if args.skip_scaling else None,
         run_live_spsa=False if args.skip_live_spsa else None,
+        run_live_nozz=False if args.skip_live_nozz else None,
         artifact_dir=args.artifact_dir,
         ckpt_dir=args.ckpt_dir,
     )

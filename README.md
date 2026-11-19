@@ -31,7 +31,8 @@ optimizer-qpu/
 │   ├── eval_capacity_bottleneck.py
 │   ├── eval_conditioning_and_opt.py
 │   ├── eval_reciprocity_and_stepper.py
-│   └── eval_matched_controls.py
+│   ├── eval_matched_controls.py
+│   └── eval_hardware_controls.py # 12q Heavy-Hex 2Q noise, Coord-PSR, STE, exact beta->0 reciprocity
 ├── tests/                        # Fast unit & smoke verification suite
 │   ├── test_qerd.py
 │   └── test_qiskit_backend.py
@@ -157,6 +158,9 @@ python -u experiments/eval_capacity_bottleneck.py
 python -u experiments/eval_conditioning_and_opt.py
 python -u experiments/eval_reciprocity_and_stepper.py
 python -u experiments/eval_matched_controls.py
+
+# Hardware-native 12q Heavy-Hex 2Q CNOT noise, 1-/4-shot Coord-PSR, exact beta->0 reciprocity, & STE controls (Kaggle GPU recommended)
+python -u experiments/eval_hardware_controls.py
 ```
 *(Analysis scripts accept `--quick` for rapid 1-seed checks and `--replot` to regenerate figures from JSON caches.)*
 

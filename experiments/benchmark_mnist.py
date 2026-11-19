@@ -2333,7 +2333,7 @@ def save_grid(imgs: np.ndarray, row_titles: List[str], out_path: str, n_cols: in
 # 5. MAIN BENCHMARK RUNNER
 # ==============================================================================
 def _build_qpu_model(args: argparse.Namespace, seed: int, is_qerd: bool = False) -> QuantumIsingDenoiser:
-    topo = "none" if (is_qerd and args.ablate == "no-zz") else args.topology
+    topo = "unentangled" if (is_qerd and args.ablate == "no-zz") else args.topology
     use_cal = bool(is_qerd and args.ablate in ("gain-cal", "gain-cal-inv"))
     cal_mode = "inverse" if (is_qerd and args.ablate == "gain-cal-inv") else "forward"
     init_gain = 0.75 if use_cal else 1.0

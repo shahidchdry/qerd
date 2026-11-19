@@ -192,42 +192,59 @@ def train_spsa_dna(
     lr_min: float = 0.012,
     c0: float = 0.22,
     clip_bound: float = 1.05,
+    spsa_shots_per_run: Optional[int] = None,
+    chain_rule_cond: bool = True,
     ro_cal: Optional[Tuple[np.ndarray, np.ndarray]] = None,
     verbose: bool = False,
 ) -> Dict[str, Any]:
-    """Fair equal-shot per-sample Rademacher 2-run SPSA + StabilizedAdam + online calibrator."""
+    """
+    Strong equal-shot per-sample multi-direction SPSA + StabilizedAdam + online calibrator.
+
+    Uses exact analytic chain-rule updates for `cond_proj` (avoiding doubling SPSA's perturbation
+    dimension across inactive one-hot conditioning columns) and trades redundant shots/circuit
+    for extra parallel Rademacher directions inside the exact same shot budget and job count.
+    """
     t0 = time.perf_counter()
     n_th = model.n_qpu_params
     has_cp = model.cond_proj is not None
     cp_shape = model.cond_proj.shape if has_cp else (0, 0)
 
     eff_bs = min(batch_size, len(x_tr))
-    n_steps = max(1, max_shots // (2 * eff_bs * shots_per_run))
+    if spsa_shots_per_run is None:
+        target_sh = min(shots_per_run, 12) if shots_per_run >= 24 else shots_per_run
+    else:
+        target_sh = max(4, min(int(spsa_shots_per_run), shots_per_run))
+    dir_mult = max(1, shots_per_run // max(1, target_sh))
+    eff_sh = max(4, shots_per_run // dir_mult)
+    n_dirs = eff_bs * dir_mult
+    step_shots = 2 * n_dirs * eff_sh
+    n_steps = max(1, max_shots // max(1, step_shots))
+    eff_lr = min(0.18, lr_max * (eff_bs / 16.0) ** 0.7) if eff_bs > 16 else lr_max
     adam = StabilizedAdam(
         model.parameters_dict(),
-        StabilizedAdamConfig(lr_max=lr_max, lr_min=lr_min, weight_decay=0.02, clip_bound=clip_bound),
+        StabilizedAdamConfig(lr_max=eff_lr, lr_min=lr_min, weight_decay=0.02, clip_bound=clip_bound),
     )
 
     for st in range(1, n_steps + 1):
         progress = (st - 1) / max(1, n_steps - 1)
-        ids = model.rng.choice(len(x_tr), size=eff_bs, replace=False)
+        ids = model.rng.choice(len(x_tr), size=n_dirs, replace=len(x_tr) < n_dirs)
         tg = x_tr[ids]
         cb = cond_tr[ids]
-        tc = (np.arange(eff_bs) % model.diffusion_steps) + 1
+        tc = (np.arange(n_dirs) % model.diffusion_steps) + 1
         model.rng.shuffle(tc)
         ab = model.alpha_bar[tc][:, None]
         xt = np.clip(np.sqrt(ab) * tg + np.sqrt(1.0 - ab) * model.rng.normal(0.0, 0.70, size=tg.shape), -1.0, 1.0)
 
         c_k = c0 / (st ** 0.101)
-        d_th = model.rng.choice([-1.0, 1.0], size=(eff_bs, n_th))
+        d_th = model.rng.choice([-1.0, 1.0], size=(n_dirs, n_th))
         th_b = np.concatenate([
             np.clip(model.theta[None, :] + c_k * d_th, -clip_bound, clip_bound),
             np.clip(model.theta[None, :] - c_k * d_th, -clip_bound, clip_bound),
         ], axis=0)
         d_cp = None
         cp_b = None
-        if has_cp:
-            d_cp = model.rng.choice([-1.0, 1.0], size=(eff_bs,) + cp_shape)
+        if has_cp and not chain_rule_cond:
+            d_cp = model.rng.choice([-1.0, 1.0], size=(n_dirs,) + cp_shape)
             cp_b = np.concatenate([
                 np.clip(model.cond_proj[None, :, :] + c_k * d_cp, -clip_bound, clip_bound),
                 np.clip(model.cond_proj[None, :, :] - c_k * d_cp, -clip_bound, clip_bound),
@@ -236,18 +253,18 @@ def train_spsa_dna(
         _, z_2b = model.measure_observables_batch(
             np.concatenate([xt, xt], axis=0),
             np.concatenate([tc, tc], axis=0),
-            shots=shots_per_run,
+            shots=eff_sh,
             cond_batch=np.concatenate([cb, cb], axis=0),
             theta_batch=th_b,
             cond_proj_batch=cp_b,
         )
-        zp, zm = z_2b[:eff_bs], z_2b[eff_bs:]
+        zp, zm = z_2b[:n_dirs], z_2b[n_dirs:]
         if ro_cal is not None:
             zp = mitigate_expectations(zp, ro_cal[0], ro_cal[1])
             zm = mitigate_expectations(zm, ro_cal[0], ro_cal[1])
 
         z_mid = 0.5 * (zp + zm)
-        for k in range(eff_bs):
+        for k in range(n_dirs):
             model.calibrator.update(int(tc[k]), z_mid[k], tg[k])
         gain_b = np.stack([model.calibrator.gain[int(t)] for t in tc], axis=0)
         if gain_b.ndim == 1:
@@ -258,18 +275,33 @@ def train_spsa_dna(
         diff = (lp - lm) / (2.0 * c_k)
 
         grads: Dict[str, np.ndarray] = {"theta": -np.mean(diff[:, None] * d_th, axis=0)}
-        if has_cp and d_cp is not None:
-            grads["cond_proj"] = -np.mean(diff[:, None, None] * d_cp, axis=0)
+        if has_cp:
+            if chain_rule_cond:
+                g_bvis = -(diff[:, None] * d_th[:, model.n_edges : model.n_edges + model.n_visible])
+                grads["cond_proj"] = np.einsum("ki,kj->ij", g_bvis, cb) / float(n_dirs)
+            elif d_cp is not None:
+                grads["cond_proj"] = -np.mean(diff[:, None, None] * d_cp, axis=0)
         adam.step(
             model.parameters_dict(),
             grads,
             progress=progress,
-            shots_in_batch=2 * eff_bs * shots_per_run,
+            shots_in_batch=step_shots,
         )
         if verbose and (st == 1 or st % 5 == 0 or st == n_steps):
-            print(f"  [SPSA QPU] Batch {st:02d}/{n_steps:02d} | Shots={adam.shots_used:6d} | Wall={time.perf_counter()-t0:.1f}s", flush=True)
+            print(
+                f"  [SPSA QPU] Batch {st:02d}/{n_steps:02d} ({n_dirs} dirs x {eff_sh} sh, cr={chain_rule_cond}) | "
+                f"Shots={adam.shots_used:6d} | Wall={time.perf_counter()-t0:.1f}s",
+                flush=True,
+            )
 
-    return {"steps": n_steps, "shots_used": adam.shots_used, "wall_sec": time.perf_counter() - t0}
+    return {
+        "steps": n_steps,
+        "n_dirs": n_dirs,
+        "shots_per_run_spsa": eff_sh,
+        "chain_rule_cond": chain_rule_cond,
+        "shots_used": adam.shots_used,
+        "wall_sec": time.perf_counter() - t0,
+    }
 
 
 def train_psr_dna(
@@ -323,6 +355,81 @@ def train_psr_dna(
         adam.step(model.parameters_dict(), grads, progress=progress, shots_in_batch=step_shots)
 
     return {"steps": n_steps, "shots_used": adam.shots_used}
+
+
+def train_coord_psr_dna(
+    model: QuantumIsingDenoiser,
+    x_tr: np.ndarray,
+    cond_tr: np.ndarray,
+    max_shots: int,
+    shots_per_shift: int = 4,
+    coords_per_step: int = 8,
+    lr_max: float = 0.08,
+    lr_min: float = 0.012,
+    clip_bound: float = 1.05,
+    ro_cal: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+) -> Dict[str, int]:
+    """Doubly stochastic randomized-coordinate PSR (Sweke et al., 2020) for conditional DNA circuits."""
+    n_p = model.n_qpu_params
+    k = max(1, min(int(coords_per_step), n_p))
+    sh = max(1, int(shots_per_shift))
+    step_shots = 2 * k * sh
+    n_steps = max(0, max_shots // max(1, step_shots))
+    m_buf = np.zeros(n_p, dtype=np.float64)
+    v_buf = np.zeros(n_p, dtype=np.float64)
+    coord_steps = np.zeros(n_p, dtype=np.int64)
+    shots_used = 0
+    b1, b2, eps = 0.75, 0.98, 1e-6
+    rows = np.arange(k)
+
+    for st in range(1, n_steps + 1):
+        progress = (st - 1) / max(1, n_steps - 1)
+        lr = lr_min + 0.5 * (lr_max - lr_min) * (1.0 + math.cos(math.pi * progress))
+        eff_decay = 1.0 - 0.02 * (lr / max(lr_max, 1e-8))
+        idx = int(model.rng.integers(0, len(x_tr)))
+        tg = x_tr[idx]
+        cb = cond_tr[idx]
+        tv = ((st - 1) % model.diffusion_steps) + 1
+        ab = model.alpha_bar[tv]
+        xt = np.clip(math.sqrt(ab) * tg + math.sqrt(1.0 - ab) * model.rng.normal(0.0, 0.70, size=tg.shape), -1.0, 1.0)
+        sel = model.rng.choice(n_p, size=k, replace=False)
+        th_p = np.broadcast_to(model.theta, (k, n_p)).copy()
+        th_m = th_p.copy()
+        th_p[rows, sel] += 0.30
+        th_m[rows, sel] -= 0.30
+        _, z_all = model.measure_observables_batch(
+            np.broadcast_to(xt, (2 * k, model.n_visible)),
+            np.full(2 * k, tv, dtype=np.int64),
+            shots=sh,
+            cond_batch=np.broadcast_to(cb, (2 * k, model.cond_dim)),
+            theta_batch=np.concatenate([th_p, th_m], axis=0),
+        )
+        shots_used += step_shots
+        if ro_cal is not None:
+            z_all = mitigate_expectations(z_all, ro_cal[0], ro_cal[1])
+        model.calibrator.update(tv, np.mean(z_all, axis=0), tg)
+        g_t = model.calibrator.gain[tv]
+        zp = np.clip(z_all[:k] / g_t, -1.0, 1.0)
+        zm = np.clip(z_all[k:] / g_t, -1.0, 1.0)
+        g_sel = -(np.mean((zp - tg[None, :]) ** 2, axis=1) - np.mean((zm - tg[None, :]) ** 2, axis=1)) / 0.60
+        coord_steps[sel] += 1
+        m_buf[sel] = b1 * m_buf[sel] + (1.0 - b1) * g_sel
+        v_buf[sel] = b2 * v_buf[sel] + (1.0 - b2) * (g_sel ** 2)
+        mh = m_buf[sel] / (1.0 - b1 ** coord_steps[sel])
+        vh = v_buf[sel] / (1.0 - b2 ** coord_steps[sel])
+        upd_sel = lr * mh / (np.sqrt(vh) + eps)
+        model.theta[sel] = np.clip(eff_decay * model.theta[sel] + upd_sel, -clip_bound, clip_bound)
+        if model.cond_proj is not None:
+            vis_mask = (sel >= model.n_edges) & (sel < model.n_edges + model.n_visible)
+            if np.any(vis_mask):
+                vis_idx = sel[vis_mask] - model.n_edges
+                model.cond_proj[vis_idx] = np.clip(
+                    eff_decay * model.cond_proj[vis_idx] + np.outer(upd_sel[vis_mask], cb),
+                    -clip_bound,
+                    clip_bound,
+                )
+
+    return {"steps": n_steps, "shots_used": shots_used, "coords_per_step": k, "shots_per_shift": sh}
 
 
 def save_dna_checkpoint(

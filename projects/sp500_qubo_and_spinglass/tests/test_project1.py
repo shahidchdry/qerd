@@ -43,6 +43,13 @@ class TestProject1Suite(unittest.TestCase):
         self.assertEqual(rep32.bad_ro_gt5pct, 0)
         self.assertEqual(rep32.bad_cz_gt2pct, 0)
 
+        cfg_sg = build_run_config("spinglass_only_128q")
+        self.assertEqual(cfg_sg.n_qubits, 128)
+        self.assertTrue(cfg_sg.run_live_spsa)
+        self.assertTrue(cfg_sg.run_live_nozz)
+        self.assertTrue(cfg_sg.skip_minvar)
+        self.assertFalse(cfg_sg.skip_untrained)
+
     def test_quick_preset_end_to_end_and_inference(self):
         with tempfile.TemporaryDirectory() as tmp:
             art_dir = os.path.join(tmp, "artifacts")

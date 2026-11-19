@@ -41,7 +41,8 @@ def build_ising_edges(
       - "grid4" / "grid8": 4- or 8-neighbor 2D grid (1D chain if len(data_shape) == 1)
       - "chain"          : 1D nearest-neighbor chain across flattened visible qubits
       - "all"            : all-to-all pairwise visible couplings (best for unstructured/latent vectors)
-      - "none"           : no visible-visible couplings (hidden edges only if n_hidden > 0)
+      - "none"           : no visible-visible couplings (retains visible-hidden edges if n_hidden > 0)
+      - "unentangled"    : strictly zero two-qubit edges (removes both visible-visible and visible-hidden)
     """
     n_visible = int(np.prod(data_shape))
     edges = set()
@@ -66,15 +67,18 @@ def build_ising_edges(
         for i in range(n_visible):
             for j in range(i + 1, n_visible):
                 edges.add((i, j))
-    elif topology == "none":
+    elif topology in ("none", "unentangled"):
         pass
     else:
-        raise ValueError(f"Unknown topology '{topology}'; expected 'grid4', 'grid8', 'chain', 'all', or 'none'.")
+        raise ValueError(
+            f"Unknown topology '{topology}'; expected 'grid4', 'grid8', 'chain', 'all', 'none', or 'unentangled'."
+        )
 
-    for h in range(n_hidden):
-        hw = n_visible + h
-        for v in range(n_visible):
-            edges.add((v, hw))
+    if topology != "unentangled":
+        for h in range(n_hidden):
+            hw = n_visible + h
+            for v in range(n_visible):
+                edges.add((v, hw))
     return sorted(edges)
 
 

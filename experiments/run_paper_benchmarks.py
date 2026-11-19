@@ -586,8 +586,8 @@ def write_latex_tables(bundle: Dict[str, Any], out_dir: str) -> str:
     # Table 3: Literature Quantum & Classical Baselines (9 cols)
     lit_rows: List[str] = []
     lit_specs = [
-        ("pqc_quddpm", "PQC-QuDDPM (Matched Shots/Noise)", "HEA PQC", "$2P_{\\text{pqc}}$"),
-        ("qcbm_mmd", "QCBM-MMD (Matched Shots/Noise)", "Born Circuit", "$2P_{\\text{qcbm}}$"),
+        ("pqc_quddpm", "PQC-QuDDPM (Matched Shots/Noise)", "HEA PQC", "$2$ SPSA ($2P_{\\text{pqc}}$ PSR)"),
+        ("qcbm_mmd", "QCBM-MMD (Matched Shots/Noise)", "Born Circuit", "$2$ SPSA ($2P_{\\text{qcbm}}$ PSR)"),
         ("classical_ising_ep", "ClassicalIsing-EP (Noiseless)", "Ising EP", "$2$ (Exact)"),
         ("classical_skip_ddpm", "Classical-DDPM + Skip", "MLP + $W_{\\text{cond}}c$", "Exact AD"),
         ("classical_large_ddpm", "Classical-Large (ResMLP Skyline)", "ResMLP", "Exact AD"),

@@ -108,4 +108,7 @@ python -m projects.sp500_qubo_and_spinglass --preset t4_full --max-sim-qubits 16
 
 # Live 128-qubit IBM Quantum execution (bs=24 packed, 38,016 shots/problem)
 python -m projects.sp500_qubo_and_spinglass --preset heron_128q --device ibm_kingston --api-key-json /path/to/apikey.json --batches 17 --batch-size 24 --shots-per-run 48 --skip-untrained
+
+# Complete 128q Heavy-Hex Frustrated Spin Glass with live equal-shot SPSA, no-zz, & untrained QPU controls
+python -m projects.sp500_qubo_and_spinglass --preset spinglass_only_128q --device ibm_kingston --api-key-json /path/to/apikey.json
 ```

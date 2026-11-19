@@ -31,7 +31,9 @@ class RunConfig:
     sample_temp: float = 1.15             # Gentle logit sharpening for stochastic MinVar sampling
     readout_mitigation: bool = True       # 1-job all-0/all-1 live marginal readout calibration
     run_live_spsa: bool = False           # Optional equal-shot live SPSA baseline on ibm_qpu
+    run_live_nozz: bool = False           # Optional zero-ZZ ablation live on ibm_qpu
     skip_untrained: bool = False          # Skip QPU sampling at th=0 (use random baseline for gap_closed)
+    skip_minvar: bool = False             # Run only Heavy-Hex Spin Glass (concentrates QPU quota)
     max_sim_qubits: int = 14
     skip_scaling: bool = False
     risk_aversion: float = 2.5
@@ -108,6 +110,26 @@ PRESETS: Dict[str, Dict[str, object]] = {
         "run_live_spsa": False,
         "max_sim_qubits": 14,
         "skip_scaling": False,
+    },
+    "spinglass_only_128q": {
+        "mode": "ibm_qpu",
+        "device": "ibm_kingston",
+        "execution_mode": "job",
+        "n_qubits": 128,                  # Complete live 128q Spin Glass + SPSA + no-zz + untrained QPU
+        "n_layers": 4,
+        "diffusion_steps": 4,
+        "batches": 17,
+        "batch_size": 24,
+        "shots_per_run": 48,              # 39,168 budget (11 QER-Res steps = 38,016 shots)
+        "eval_samples": 64,
+        "eval_shots": 96,
+        "readout_mitigation": True,
+        "run_live_spsa": True,
+        "run_live_nozz": True,
+        "skip_untrained": False,
+        "skip_minvar": True,
+        "max_sim_qubits": 14,
+        "skip_scaling": True,
     },
     "heron_156q": {
         "mode": "ibm_qpu",

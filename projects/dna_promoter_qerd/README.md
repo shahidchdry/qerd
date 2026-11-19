@@ -33,6 +33,6 @@ python -m unittest discover -s projects/dna_promoter_qerd/tests -v
 # Full Local CPU benchmark (`16q` Core TATA/Inr quantum vs PSR/SPSA/Markov)
 python -m projects.dna_promoter_qerd --preset local_cpu
 
-# Live 128q (64 bp) IBM Quantum execution (`ibm_kingston`, `38,016` QER-Res shots)
-python -m projects.dna_promoter_qerd --preset heron_128q --device ibm_kingston --api-key-json /path/to/apikey.json --batches 17 --batch-size 24 --shots-per-run 48 --skip-live-spsa
+# Live 128q (64 bp) IBM Quantum execution with live SPSA, no-zz, TATA-matched filtering, & filtered real-DNA control
+python -m projects.dna_promoter_qerd --preset heron_128q --device ibm_kingston --api-key-json /path/to/apikey.json --batches 17 --batch-size 24 --shots-per-run 48
 ```

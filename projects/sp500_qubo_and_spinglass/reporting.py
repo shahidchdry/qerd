@@ -106,48 +106,56 @@ def make_summary_figure(
     ax.legend(fontsize=7.4, loc="upper left", framealpha=0.95)
     ax.grid(True, ls="--", alpha=0.25)
 
-    # Panel (b): S&P 500 Unseen Market Profit ($10k Capital) + Exact QUBO Cost
+    # Panel (b): S&P 500 Unseen Market Profit ($10k Capital) + Exact QUBO Cost (or Spin-Glass Energy if minvar skipped)
     ax = axes[1]
     order_mv = [
         ("buy_hold_1N", "Buy&Hold\n(1/N Base)", "#4D4D4D"),
         ("untrained_qpu", "Untrained\nQPU", "#999999"),
         ("untrained_baseline", "Random\nBaseline", "#999999"),
+        ("nozz_qpu", "QERD\nno-zz", "#D55E00"),
         ("psr_qpu", "Equal-Shot\nPSR", "#CC79A7"),
+        ("coord_psr_qpu", "Coord-PSR\n(4sh)", "#56B4E9"),
         ("spsa_qpu", "Equal-Shot\nSPSA", "#E69F00"),
         ("qerd_qpu", "QERD QPU\n(Ours)", "#0072B2"),
         ("sa_ceiling", "SA Target\n(Classical)", "#009E73"),
     ]
     rows_mv = [(k, lbl, col) for k, lbl, col in order_mv if k in minvar_comp]
-    profits = [minvar_comp[k]["oos_ens_profit_usd"] for k, _, _ in rows_mv]
-    costs = [minvar_comp[k]["mean_qubo_cost"] for k, _, _ in rows_mv]
-    xb = np.arange(len(rows_mv))
-    bars = ax.bar(xb, profits, width=0.58, color=[c for _, _, c in rows_mv], edgecolor="#222222", linewidth=0.9)
-    if "qerd_qpu" in minvar_comp:
-        q_idx = [k for k, _, _ in rows_mv].index("qerd_qpu")
-        bars[q_idx].set_linewidth(1.8)
-    bh_val = minvar_comp.get("buy_hold_1N", {}).get("oos_ens_profit_usd", None)
-    if bh_val is not None:
-        ax.axhline(bh_val, color="#333333", ls="--", lw=1.2, label=f"Buy&Hold 1/N Base (+${bh_val:,.0f})")
-    for b, prof, cost in zip(bars, profits, costs):
-        p_txt = f"+${prof/1000:.1f}k" if prof >= 0 else f"-${abs(prof)/1000:.1f}k"
-        ax.text(b.get_x() + b.get_width() / 2, max(prof, 0.0) + 220.0,
-                f"{p_txt}\n(Cost {cost:+.3f})", ha="center", va="bottom", fontsize=6.6, fontweight="bold",
-                bbox=dict(boxstyle="round,pad=0.14", facecolor="white", edgecolor="none", alpha=0.88), zorder=5)
-    ax.set_xticks(xb)
-    ax.set_xticklabels([l for _, l, _ in rows_mv], fontsize=7.3)
-    ax.set_ylim(0.0, max(profits + [10000.0]) * 1.24)
-    mv_tag = f"{mv_qubits}q, " if mv_qubits else ""
-    ax.set_ylabel("Unseen 2022-25 Profit (USD, 10k Capital) ↑")
-    ax.set_title(f"(b) S&P 500 Profit ({mv_tag}+$10k) & QUBO Cost")
-    ax.legend(fontsize=7.3, loc="upper left", framealpha=0.95)
-    ax.grid(axis="y", ls="--", alpha=0.25)
+    if rows_mv:
+        profits = [minvar_comp[k]["oos_ens_profit_usd"] for k, _, _ in rows_mv]
+        costs = [minvar_comp[k]["mean_qubo_cost"] for k, _, _ in rows_mv]
+        xb = np.arange(len(rows_mv))
+        bars = ax.bar(xb, profits, width=0.58, color=[c for _, _, c in rows_mv], edgecolor="#222222", linewidth=0.9)
+        if "qerd_qpu" in minvar_comp:
+            q_idx = [k for k, _, _ in rows_mv].index("qerd_qpu")
+            bars[q_idx].set_linewidth(1.8)
+        bh_val = minvar_comp.get("buy_hold_1N", {}).get("oos_ens_profit_usd", None)
+        if bh_val is not None:
+            ax.axhline(bh_val, color="#333333", ls="--", lw=1.2, label=f"Buy&Hold 1/N Base (+${bh_val:,.0f})")
+        for b, prof, cost in zip(bars, profits, costs):
+            p_txt = f"+${prof/1000:.1f}k" if prof >= 0 else f"-${abs(prof)/1000:.1f}k"
+            ax.text(b.get_x() + b.get_width() / 2, max(prof, 0.0) + 220.0,
+                    f"{p_txt}\n(Cost {cost:+.3f})", ha="center", va="bottom", fontsize=6.6, fontweight="bold",
+                    bbox=dict(boxstyle="round,pad=0.14", facecolor="white", edgecolor="none", alpha=0.88), zorder=5)
+        ax.set_xticks(xb)
+        ax.set_xticklabels([l for _, l, _ in rows_mv], fontsize=7.0)
+        ax.set_ylim(0.0, max(profits + [10000.0]) * 1.24)
+        mv_tag = f"{mv_qubits}q, " if mv_qubits else ""
+        ax.set_ylabel("Unseen 2022-25 Profit (USD, 10k Capital) ↑")
+        ax.set_title(f"(b) S&P 500 Profit ({mv_tag}+$10k) & QUBO Cost")
+        ax.legend(fontsize=7.3, loc="upper left", framealpha=0.95)
+        ax.grid(axis="y", ls="--", alpha=0.25)
+    else:
+        ax.text(0.5, 0.5, "S&P 500 QUBO skipped\n(--skip-minvar)", ha="center", va="center", fontsize=9)
+        ax.set_axis_off()
 
     # Panel (c): Native Heavy-Hex Spin Glass Satisfied Bonds % ONLY (clean single metric)
     ax = axes[2]
     order_sg = [
         ("untrained_qpu", "Untrained", "#999999"),
         ("untrained_baseline", "Random\nBase", "#999999"),
+        ("nozz_qpu", "QERD\nno-zz", "#D55E00"),
         ("psr_qpu", "Equal-Shot\nPSR", "#CC79A7"),
+        ("coord_psr_qpu", "Coord-PSR\n(4sh)", "#56B4E9"),
         ("spsa_qpu", "Equal-Shot\nSPSA", "#E69F00"),
         ("qerd_qpu", "QERD QPU\n(Ours)", "#0072B2"),
         ("sa_ceiling", "SA Target", "#009E73"),

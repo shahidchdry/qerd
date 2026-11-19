@@ -598,7 +598,7 @@ def make_proof_figure(results: Dict[str, Any], out_dir: str) -> None:
     n_seeds = len(results["seeds"])
     seed_lbl = "Seed" if n_seeds == 1 else "Seeds"
     fig.suptitle(
-        f"Attribution of Zero-AE 12-Qubit Cluster Spin-Glass Performance ({n_seeds} {seed_lbl})\n"
+        f"Attribution of Zero-AE 12-Qubit Stride-3 Correlated Cluster Performance ({n_seeds} {seed_lbl})\n"
         "(Matched-Box Factorial Controls Isolate $ZZ$ Coupling, Depth $L$, Forward-OLS Calibration, & Hardware Noise)",
         fontsize=10.4, fontweight="bold", y=0.995,
     )

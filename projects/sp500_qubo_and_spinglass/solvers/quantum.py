@@ -192,45 +192,61 @@ def train_spsa_equal_shot(
     max_shots: int,
     shots_per_run: int,
     batch_size: int,
-    lr_max: float = 0.12,
+    lr_max: float = 0.13,
     lr_min: float = 0.015,
     c0: float = 0.22,
     clip_bound: float = 1.30,
     weight_decay: float = 0.015,
+    spsa_shots_per_run: Optional[int] = None,
     ro_cal: Optional[Tuple[np.ndarray, np.ndarray]] = None,
     verbose: bool = False,
 ) -> Dict[str, Any]:
-    """Fair equal-shot per-sample Rademacher 2-run SPSA + StabilizedAdam + online calibrator."""
+    """
+    Strong equal-shot per-sample multi-direction SPSA + StabilizedAdam + online calibrator.
+
+    Trades redundant shots-per-circuit for additional parallel Rademacher directions inside the
+    exact same total shot budget and QPU job count (reducing O(P) mask-crosstalk variance while
+    keeping 1.5x more steps than 3-circuit QER-Res).
+    """
     t_start = time.perf_counter()
     n_p = model.n_qpu_params
     eff_bs = min(batch_size, len(x_tr))
-    n_steps = max(1, max_shots // (2 * eff_bs * shots_per_run))
+    if spsa_shots_per_run is None:
+        target_sh = min(shots_per_run, 12) if shots_per_run >= 24 else shots_per_run
+    else:
+        target_sh = max(4, min(int(spsa_shots_per_run), shots_per_run))
+    dir_mult = max(1, shots_per_run // max(1, target_sh))
+    eff_sh = max(4, shots_per_run // dir_mult)
+    n_dirs = eff_bs * dir_mult
+    step_shots = 2 * n_dirs * eff_sh
+    n_steps = max(1, max_shots // max(1, step_shots))
+    eff_lr = min(0.18, lr_max * (eff_bs / 16.0) ** 0.7) if eff_bs > 16 else lr_max
     adam = StabilizedAdam(
         model.parameters_dict(),
-        StabilizedAdamConfig(lr_max=lr_max, lr_min=lr_min, weight_decay=weight_decay, clip_bound=clip_bound),
+        StabilizedAdamConfig(lr_max=eff_lr, lr_min=lr_min, weight_decay=weight_decay, clip_bound=clip_bound),
     )
 
     for st in range(1, n_steps + 1):
         progress = (st - 1) / max(1, n_steps - 1)
-        tg, tc, xt = _sample_noisy_batch(model, x_tr, eff_bs)
+        tg, tc, xt = _sample_noisy_batch(model, x_tr, n_dirs)
         c_k = c0 / (st ** 0.101)
-        d_th = model.rng.choice([-1.0, 1.0], size=(eff_bs, n_p))
+        d_th = model.rng.choice([-1.0, 1.0], size=(n_dirs, n_p))
         th_p = np.clip(model.theta[None, :] + c_k * d_th, -clip_bound, clip_bound)
         th_m = np.clip(model.theta[None, :] - c_k * d_th, -clip_bound, clip_bound)
 
         _, z_2b = model.measure_observables_batch(
             np.concatenate([xt, xt], axis=0),
             np.concatenate([tc, tc], axis=0),
-            shots=shots_per_run,
+            shots=eff_sh,
             theta_batch=np.concatenate([th_p, th_m], axis=0),
         )
-        zp, zm = z_2b[:eff_bs], z_2b[eff_bs:]
+        zp, zm = z_2b[:n_dirs], z_2b[n_dirs:]
         if ro_cal is not None:
             zp = mitigate_expectations(zp, ro_cal[0], ro_cal[1])
             zm = mitigate_expectations(zm, ro_cal[0], ro_cal[1])
 
         z_mid = 0.5 * (zp + zm)
-        for k in range(eff_bs):
+        for k in range(n_dirs):
             model.calibrator.update(int(tc[k]), z_mid[k], tg[k])
         gain_b = np.stack([model.calibrator.gain[int(t)] for t in tc], axis=0)
         if gain_b.ndim == 1:
@@ -241,11 +257,21 @@ def train_spsa_equal_shot(
         diff = (lp - lm) / (2.0 * c_k)
         grad_th = -np.mean(diff[:, None] * d_th, axis=0)
 
-        adam.step(model.parameters_dict(), {"theta": grad_th}, progress=progress, shots_in_batch=2 * eff_bs * shots_per_run)
+        adam.step(model.parameters_dict(), {"theta": grad_th}, progress=progress, shots_in_batch=step_shots)
         if verbose and (st == 1 or st % 5 == 0 or st == n_steps):
-            print(f"  [SPSA Train] Batch {st:02d}/{n_steps:02d} | Shots={adam.shots_used:5d} | Wall={time.perf_counter()-t_start:.1f}s", flush=True)
+            print(
+                f"  [SPSA Train] Batch {st:02d}/{n_steps:02d} ({n_dirs} dirs x {eff_sh} sh) | "
+                f"Shots={adam.shots_used:5d} | Wall={time.perf_counter()-t_start:.1f}s",
+                flush=True,
+            )
 
-    return {"steps": n_steps, "shots_used": adam.shots_used, "wall_sec": time.perf_counter() - t_start}
+    return {
+        "steps": n_steps,
+        "n_dirs": n_dirs,
+        "shots_per_run_spsa": eff_sh,
+        "shots_used": adam.shots_used,
+        "wall_sec": time.perf_counter() - t_start,
+    }
 
 
 def train_psr_equal_shot(
@@ -295,6 +321,75 @@ def train_psr_equal_shot(
         adam.step(model.parameters_dict(), {"theta": grad_th}, progress=progress, shots_in_batch=step_shots)
 
     return {"steps": n_steps, "shots_used": adam.shots_used}
+
+
+def train_coord_psr_equal_shot(
+    model: QuantumIsingDenoiser,
+    x_tr: np.ndarray,
+    max_shots: int,
+    shots_per_shift: int = 4,
+    coords_per_step: int = 8,
+    lr_max: float = 0.10,
+    lr_min: float = 0.015,
+    clip_bound: float = 1.30,
+    weight_decay: float = 0.015,
+    ro_cal: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+) -> Dict[str, int]:
+    """
+    Doubly stochastic randomized-coordinate PSR (Sweke et al., 2020) under equal shot budget.
+
+    Samples `k = min(coords_per_step, P)` random parameter coordinates per step and evaluates
+    symmetric shifts with `shots_per_shift` shots per query, giving `O(max_shots / (2*k*shots_per_shift))`
+    updates instead of full-sweep PSR's step starvation.
+    """
+    n_p = model.n_qpu_params
+    k = max(1, min(int(coords_per_step), n_p))
+    sh = max(1, int(shots_per_shift))
+    step_shots = 2 * k * sh
+    n_steps = max(0, max_shots // max(1, step_shots))
+    m_buf = np.zeros(n_p, dtype=np.float64)
+    v_buf = np.zeros(n_p, dtype=np.float64)
+    coord_steps = np.zeros(n_p, dtype=np.int64)
+    shots_used = 0
+    b1, b2, eps = 0.75, 0.98, 1e-6
+
+    for st in range(1, n_steps + 1):
+        progress = (st - 1) / max(1, n_steps - 1)
+        lr = lr_min + 0.5 * (lr_max - lr_min) * (1.0 + math.cos(math.pi * progress))
+        eff_decay = 1.0 - weight_decay * (lr / max(lr_max, 1e-8))
+        tg = x_tr[int(model.rng.integers(0, len(x_tr)))]
+        tv = ((st - 1) % model.diffusion_steps) + 1
+        ab = model.alpha_bar[tv]
+        xt = np.clip(math.sqrt(ab) * tg + math.sqrt(1.0 - ab) * model.rng.normal(0.0, 0.70, size=tg.shape), -1.0, 1.0)
+        sel = model.rng.choice(n_p, size=k, replace=False)
+        th_p = np.broadcast_to(model.theta, (k, n_p)).copy()
+        th_m = th_p.copy()
+        rows = np.arange(k)
+        th_p[rows, sel] += 0.30
+        th_m[rows, sel] -= 0.30
+        _, z_all = model.measure_observables_batch(
+            np.broadcast_to(xt, (2 * k, model.n_visible)),
+            np.full(2 * k, tv, dtype=np.int64),
+            shots=sh,
+            theta_batch=np.concatenate([th_p, th_m], axis=0),
+        )
+        shots_used += step_shots
+        if ro_cal is not None:
+            z_all = mitigate_expectations(z_all, ro_cal[0], ro_cal[1])
+        model.calibrator.update(tv, np.mean(z_all, axis=0), tg)
+        g_t = model.calibrator.gain[tv]
+        zp = np.clip(z_all[:k] / g_t, -1.0, 1.0)
+        zm = np.clip(z_all[k:] / g_t, -1.0, 1.0)
+        g_sel = -(np.mean((zp - tg[None, :]) ** 2, axis=1) - np.mean((zm - tg[None, :]) ** 2, axis=1)) / 0.60
+        # Sparse per-coordinate Adam: only update moments and weights for sampled coordinates
+        coord_steps[sel] += 1
+        m_buf[sel] = b1 * m_buf[sel] + (1.0 - b1) * g_sel
+        v_buf[sel] = b2 * v_buf[sel] + (1.0 - b2) * (g_sel ** 2)
+        mh = m_buf[sel] / (1.0 - b1 ** coord_steps[sel])
+        vh = v_buf[sel] / (1.0 - b2 ** coord_steps[sel])
+        model.theta[sel] = np.clip(eff_decay * model.theta[sel] + lr * mh / (np.sqrt(vh) + eps), -clip_bound, clip_bound)
+
+    return {"steps": n_steps, "shots_used": shots_used, "coords_per_step": k, "shots_per_shift": sh}
 
 
 def save_qerd_checkpoint(

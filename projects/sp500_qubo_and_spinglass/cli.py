@@ -29,6 +29,7 @@ from .solvers import (  # noqa: E402
     sample_qerd_batch,
     save_qerd_checkpoint,
     solve_simulated_annealing,
+    train_coord_psr_equal_shot,
     train_psr_equal_shot,
     train_qerd_explicit,
     train_spsa_equal_shot,
@@ -204,6 +205,77 @@ def _eval_problem_equal_shot(
             comp["psr_qpu"] = problem.evaluate(s_psr, un_cost, sa_cost)
             comp["psr_qpu"]["steps_executed"] = float(psr_info["steps"])
 
+        with QuantumIsingDenoiser(
+            data_shape=prob_qubits,
+            cond_dim=0,
+            edges=edges,
+            n_layers=cfg.n_layers,
+            diffusion_steps=cfg.diffusion_steps,
+            cal_mode=cfg.cal_mode,
+            init_gain=0.75,
+            gain_ema=0.10,
+            gain_bounds=(0.40, 1.00),
+            seed=cfg.seed,
+            **model_kw,
+        ) as cpsr_m:
+            cpsr_info = train_coord_psr_equal_shot(
+                cpsr_m,
+                x_tr,
+                max_shots=cfg.max_shots,
+                shots_per_shift=4,
+                coords_per_step=min(8, max(2, cpsr_m.n_qpu_params // 3)),
+                ro_cal=ro_cal,
+            )
+            s_cpsr = sample_qerd_batch(
+                cpsr_m,
+                n_samples=cfg.eval_samples,
+                shots_per_step=cfg.eval_shots,
+                step_noise_scale=step_noise_scale,
+                sample_temp=cfg.sample_temp,
+                stochastic_decode=stochastic_decode,
+                ro_cal=ro_cal,
+            )
+            comp["coord_psr_qpu"] = problem.evaluate(s_cpsr, un_cost, sa_cost)
+            comp["coord_psr_qpu"]["steps_executed"] = float(cpsr_info["steps"])
+
+    run_nozz = (cfg.mode == "local_sim") or (is_live_qpu and cfg.run_live_nozz)
+    if run_nozz:
+        with QuantumIsingDenoiser(
+            data_shape=prob_qubits,
+            cond_dim=0,
+            edges=[],
+            n_layers=cfg.n_layers,
+            diffusion_steps=cfg.diffusion_steps,
+            cal_mode=cfg.cal_mode,
+            init_gain=0.75,
+            gain_ema=0.10,
+            gain_bounds=(0.40, 1.00),
+            seed=cfg.seed,
+            **model_kw,
+        ) as nozz_m:
+            if is_live_qpu:
+                print(f"[{problem_name}] Training zero-ZZ (no-zz) ablation on {cfg.device} ({cfg.max_shots:,} shots, {prob_qubits}q)...", flush=True)
+            train_qerd_explicit(
+                nozz_m,
+                x_tr,
+                max_shots=cfg.max_shots,
+                shots_per_run=cfg.shots_per_run,
+                batch_size=cfg.batch_size,
+                nudge_mode=cfg.nudge_mode,
+                ro_cal=ro_cal,
+                verbose=is_live_qpu,
+            )
+            s_nozz = sample_qerd_batch(
+                nozz_m,
+                n_samples=cfg.eval_samples,
+                shots_per_step=cfg.eval_shots,
+                step_noise_scale=step_noise_scale,
+                sample_temp=cfg.sample_temp,
+                stochastic_decode=stochastic_decode,
+                ro_cal=ro_cal,
+            )
+            comp["nozz_qpu"] = problem.evaluate(s_nozz, un_cost, sa_cost)
+
     return comp
 
 
@@ -234,7 +306,8 @@ def run_benchmark(cfg: RunConfig, clear_outputs: bool = False) -> None:
         print(f"[Clean] Cleared {n1} artifact(s) and {n2} checkpoint(s).", flush=True)
     os.makedirs(cfg.artifact_dir, exist_ok=True)
     os.makedirs(cfg.ckpt_dir, exist_ok=True)
-    ensure_sp500_dataset(cfg.csv_path)
+    if not cfg.skip_minvar:
+        ensure_sp500_dataset(cfg.csv_path)
 
     audits = audit_all_heron_r2()
     proj_nq = cfg.n_qubits if cfg.n_qubits >= 64 else 128
@@ -263,8 +336,8 @@ def run_benchmark(cfg: RunConfig, clear_outputs: bool = False) -> None:
     )
     live_qpu = sg_mkw.get("device_kwargs", {}).get("backend") if cfg.mode == "ibm_qpu" else None
 
-    mv_qubits = min(cfg.n_qubits, _count_csv_tickers(cfg.csv_path))
-    if mv_qubits == cfg.n_qubits:
+    mv_qubits = cfg.n_qubits if cfg.skip_minvar else min(cfg.n_qubits, _count_csv_tickers(cfg.csv_path))
+    if mv_qubits == cfg.n_qubits or cfg.skip_minvar:
         mv_edges, mv_mkw, mv_sub, mv_ro_cal = sg_edges, sg_mkw, sg_sub, sg_ro_cal
     else:
         mv_edges, mv_mkw, mv_sub, mv_ro_cal, _ = prepare_problem_backend(
@@ -300,46 +373,48 @@ def run_benchmark(cfg: RunConfig, clear_outputs: bool = False) -> None:
         flush=True,
     )
 
-    # Problem 1: Real S&P 500 Markowitz QUBO (stochastic ensemble sampling avoids modal corner collapse)
-    split = load_sp500_split(cfg.csv_path, mv_qubits, split_date=cfg.split_date)
-    mv_prob = build_minvar_problem(split, risk_aversion=cfg.risk_aversion, card_penalty=cfg.card_penalty)
-    mv_sa = solve_simulated_annealing(
-        mv_qubits,
-        mv_prob.cost_fn,
-        n_targets=128 if mv_qubits > 16 else 64,
-        sweeps=100 if mv_qubits > 16 else 80,
-        seed=cfg.seed,
-    )
-    mv_greedy = greedy_minvar_portfolio(mv_prob.cov_train_ann, mv_prob.target_k)
-    mv_bh = np.ones((1, mv_qubits), dtype=np.float64)
+    # Problem 1: Real S&P 500 Markowitz QUBO (optional; skipped when --skip-minvar focuses QPU quota on Spin Glass)
+    mv_comp: Dict[str, Dict[str, float]] = {}
     mv_ckpt = os.path.join(cfg.ckpt_dir, f"minvar_qerd_{mv_qubits}q.npz")
-    mv_comp = _eval_problem_equal_shot(
-        "minvar_qubo",
-        mv_prob,
-        x_tr=mv_sa,
-        x_sa_eval=mv_sa,
-        extra_classical={"buy_hold_1N": mv_bh, "greedy_minvar": mv_greedy},
-        edges=mv_edges,
-        model_kw=mv_mkw,
-        cfg=cfg,
-        ckpt_path=mv_ckpt,
-        stochastic_decode=True,
-        step_noise_scale=0.55,
-        ro_cal=mv_ro_cal,
-    )
+    if not cfg.skip_minvar:
+        split = load_sp500_split(cfg.csv_path, mv_qubits, split_date=cfg.split_date)
+        mv_prob = build_minvar_problem(split, risk_aversion=cfg.risk_aversion, card_penalty=cfg.card_penalty)
+        mv_sa = solve_simulated_annealing(
+            mv_qubits,
+            mv_prob.cost_fn,
+            n_targets=128 if mv_qubits > 16 else 64,
+            sweeps=100 if mv_qubits > 16 else 80,
+            seed=cfg.seed,
+        )
+        mv_greedy = greedy_minvar_portfolio(mv_prob.cov_train_ann, mv_prob.target_k)
+        mv_bh = np.ones((1, mv_qubits), dtype=np.float64)
+        mv_comp = _eval_problem_equal_shot(
+            "minvar_qubo",
+            mv_prob,
+            x_tr=mv_sa,
+            x_sa_eval=mv_sa,
+            extra_classical={"buy_hold_1N": mv_bh, "greedy_minvar": mv_greedy},
+            edges=mv_edges,
+            model_kw=mv_mkw,
+            cfg=cfg,
+            ckpt_path=mv_ckpt,
+            stochastic_decode=True,
+            step_noise_scale=0.55,
+            ro_cal=mv_ro_cal,
+        )
 
-    print(f"\n[Part B1] S&P 500 QUBO ({len(split.tickers)} real stocks, Train {split.train_dates[0]}..{split.train_dates[-1]}, Unseen {split.test_dates[0]}..{split.test_dates[-1]}):")
-    print(f"  {'Solver':<18} | {'QUBO Cost ↓':>11} | {'Profit ($10k) ↑':>15} | {'vs Buy&Hold':>12} | {'OOS Vol ↓':>9} | {'Sharpe ↑':>8}")
-    print("  " + "-" * 89)
-    bh_prof = mv_comp.get("buy_hold_1N", {}).get("oos_ens_profit_usd", 0.0)
-    for k, lbl in [("buy_hold_1N", "Buy&Hold 1/N (Base)"), ("untrained_qpu", "Untrained (th=0)"), ("untrained_baseline", "Untrained (rand)"), ("greedy_minvar", "Greedy Min-Var"), ("psr_qpu", "Equal-Shot PSR"), ("spsa_qpu", "Equal-Shot SPSA"), ("qerd_qpu", "QERD QPU (Ours)"), ("sa_ceiling", "SA Target")]:
-        if k in mv_comp:
-            m = mv_comp[k]
-            prof = m["oos_ens_profit_usd"]
-            prof_s = f"+${prof:,.0f}" if prof >= 0 else f"-${abs(prof):,.0f}"
-            diff = prof - bh_prof
-            diff_s = "$0 (Base)" if k == "buy_hold_1N" else (f"+${diff:,.0f}" if diff >= 0 else f"-${abs(diff):,.0f}")
-            print(f"  {lbl:<18} | {m['mean_qubo_cost']:>11.4f} | {prof_s:>15s} | {diff_s:>12s} | {m['oos_ens_vol_pct']:>8.2f}% | {m['oos_ens_sharpe']:>8.2f}")
+        print(f"\n[Part B1] S&P 500 QUBO ({len(split.tickers)} real stocks, Train {split.train_dates[0]}..{split.train_dates[-1]}, Unseen {split.test_dates[0]}..{split.test_dates[-1]}):")
+        print(f"  {'Solver':<18} | {'QUBO Cost ↓':>11} | {'Profit ($10k) ↑':>15} | {'vs Buy&Hold':>12} | {'OOS Vol ↓':>9} | {'Sharpe ↑':>8}")
+        print("  " + "-" * 89)
+        bh_prof = mv_comp.get("buy_hold_1N", {}).get("oos_ens_profit_usd", 0.0)
+        for k, lbl in [("buy_hold_1N", "Buy&Hold 1/N (Base)"), ("untrained_qpu", "Untrained (th=0)"), ("untrained_baseline", "Untrained (rand)"), ("nozz_qpu", "QERD no-zz (0 ZZ)"), ("greedy_minvar", "Greedy Min-Var"), ("psr_qpu", "Equal-Shot PSR"), ("coord_psr_qpu", "Coord-PSR (4sh)"), ("spsa_qpu", "Equal-Shot SPSA"), ("qerd_qpu", "QERD QPU (Ours)"), ("sa_ceiling", "SA Target")]:
+            if k in mv_comp:
+                m = mv_comp[k]
+                prof = m["oos_ens_profit_usd"]
+                prof_s = f"+${prof:,.0f}" if prof >= 0 else f"-${abs(prof):,.0f}"
+                diff = prof - bh_prof
+                diff_s = "$0 (Base)" if k == "buy_hold_1N" else (f"+${diff:,.0f}" if diff >= 0 else f"-${abs(diff):,.0f}")
+                print(f"  {lbl:<18} | {m['mean_qubo_cost']:>11.4f} | {prof_s:>15s} | {diff_s:>12s} | {m['oos_ens_vol_pct']:>8.2f}% | {m['oos_ens_sharpe']:>8.2f}")
 
     # Problem 2: Native Heavy-Hex Frustrated Spin Glass (Z2-symmetrized SA targets eliminate spurious h bias)
     sg_prob = build_spinglass_problem(cfg.n_qubits, sg_edges, seed=cfg.seed)
@@ -370,7 +445,7 @@ def run_benchmark(cfg: RunConfig, clear_outputs: bool = False) -> None:
     print(f"\n[Part B2] Native Heavy-Hex Spin Glass ({cfg.n_qubits}q, |E|={len(sg_edges)}):")
     print(f"  {'Solver':<18} | {'Energy ↓':>9} | {'Sat Bonds ↑':>11} | {'Gap Closed ↑':>12} | {'Uniq %':>7}")
     print("  " + "-" * 69)
-    for k, lbl in [("sa_ceiling", "SA Ceiling"), ("untrained_qpu", "Untrained (th=0)"), ("untrained_baseline", "Untrained (rand)"), ("psr_qpu", "Equal-Shot PSR"), ("spsa_qpu", "Equal-Shot SPSA"), ("qerd_qpu", "QERD QPU (Ours)")]:
+    for k, lbl in [("sa_ceiling", "SA Ceiling"), ("untrained_qpu", "Untrained (th=0)"), ("untrained_baseline", "Untrained (rand)"), ("nozz_qpu", "QERD no-zz (0 ZZ)"), ("psr_qpu", "Equal-Shot PSR"), ("coord_psr_qpu", "Coord-PSR (4sh)"), ("spsa_qpu", "Equal-Shot SPSA"), ("qerd_qpu", "QERD QPU (Ours)")]:
         if k in sg_comp:
             m = sg_comp[k]
             print(f"  {lbl:<18} | {m['mean_energy']:>9.2f} | {m['satisfied_bonds_pct']:>10.1f}% | {m['gap_closed_pct']:>11.1f}% | {100*m['unique_frac']:>6.1f}%")
@@ -484,7 +559,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser.add_argument("--sample-temp", type=float, default=None)
     parser.add_argument("--no-readout-mitigation", action="store_true")
     parser.add_argument("--run-live-spsa", action="store_true")
+    parser.add_argument("--run-live-nozz", action="store_true")
     parser.add_argument("--skip-untrained", action="store_true")
+    parser.add_argument("--skip-minvar", action="store_true")
     parser.add_argument("--max-sim-qubits", type=int, default=None)
     parser.add_argument("--skip-scaling", action="store_true")
     parser.add_argument("--risk-aversion", type=float, default=None)
@@ -512,7 +589,9 @@ def main(argv: Optional[List[str]] = None) -> None:
         sample_temp=args.sample_temp,
         readout_mitigation=False if args.no_readout_mitigation else None,
         run_live_spsa=True if args.run_live_spsa else None,
+        run_live_nozz=True if args.run_live_nozz else None,
         skip_untrained=True if args.skip_untrained else None,
+        skip_minvar=True if args.skip_minvar else None,
         max_sim_qubits=args.max_sim_qubits,
         skip_scaling=True if args.skip_scaling else None,
         risk_aversion=args.risk_aversion,

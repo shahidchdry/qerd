@@ -32,6 +32,7 @@ class RunConfig:
     stochastic_decode: bool = True        # Sample discrete spins stochastically instead of mean-sign thresholding
     readout_mitigation: bool = True       # 1-job all-0/all-1 hardware confusion correction
     run_live_spsa: bool = True            # Also run equal-shot SPSA live on QPU when mode=ibm_qpu
+    run_live_nozz: bool = True            # Also run zero-ZZ (no-zz) ablation live on QPU when mode=ibm_qpu
     oracle_epochs: int = 4
     max_train_targets: int = 600          # High-confidence biophysically valid promoter targets
     max_sim_qubits: int = 14
