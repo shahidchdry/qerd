@@ -817,10 +817,17 @@ def write_latex_macros(res: Dict[str, Any], out_tex: str) -> None:
         s = mc[k]
         if k == "exact_ad_clean":
             lines.append("  \\midrule")
-        lines.append(
-            f"  {lbl} & {_ms(s['sat_bonds'], '.1f', True)} & {_ms(s['gap_closed'], '.1f', True)} & "
-            f"${s['mean_energy']['mean']:+.2f}$ \\\\"
-        )
+        if k == "qer_res":
+            lines.append(
+                f"  {lbl} & $\\mathbf{{{s['sat_bonds']['mean']:.1f} \\pm {s['sat_bonds']['std']:.1f}\\%}}$ & "
+                f"$\\mathbf{{{s['gap_closed']['mean']:.1f} \\pm {s['gap_closed']['std']:.1f}\\%}}$ & "
+                f"$\\mathbf{{{s['mean_energy']['mean']:+.2f}}}$ \\\\"
+            )
+        else:
+            lines.append(
+                f"  {lbl} & {_ms(s['sat_bonds'], '.1f', True)} & {_ms(s['gap_closed'], '.1f', True)} & "
+                f"${s['mean_energy']['mean']:+.2f}$ \\\\"
+            )
     lines.append("}")
 
     # 2) Exp 2B 2Q CNOT noise sweep
@@ -864,9 +871,9 @@ def write_latex_macros(res: Dict[str, Any], out_tex: str) -> None:
     h_map = [
         ("clean_ad_unadapted", "Clean \\texttt{Exact-AD} $\\to$ NISQ24", "Sim ($0$)"),
         ("noise_aware_ad", "Noise-Aware \\texttt{Exact-AD} (Sim)", "Sim ($0$)"),
-        ("ste_0bwd", "\\texttt{STE} ($0$ bwd QPU shots)", "1/3x"),
-        ("qer_theta_frozen", "\\texttt{QERLayer} ($\\theta{=}0$ frozen)", "1x"),
-        ("qer_trainable", "\\textbf{\\texttt{QERLayer} (Trainable $\\theta$)}", "1x"),
+        ("ste_0bwd", "\\texttt{STE} ($0$ bwd QPU shots)", "$1/3\\times$"),
+        ("qer_theta_frozen", "\\texttt{QERLayer} ($\\theta{=}0$ frozen)", "$1\\times$"),
+        ("qer_trainable", "\\textbf{\\texttt{QERLayer} (Trainable $\\theta$)}", "$1\\times$"),
     ]
     lines.append("\\providecommand{\\qerHybridSteRows}{}")
     lines.append("\\renewcommand{\\qerHybridSteRows}{%")
@@ -899,7 +906,7 @@ def make_live_heron_figure(out_dir: str) -> None:
     with open(os.path.join(root, "projects", "dna_promoter_qerd", "artifacts", "metrics.json"), "r", encoding="utf-8") as f:
         p2 = json.load(f)
 
-    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.0))
+    fig, axes = plt.subplots(1, 3, figsize=(14.4, 4.2), gridspec_kw={"width_ratios": [0.95, 1.18, 1.18]})
 
     # Panel (a): QPU Circuits/Sample Scaling vs 2^N GPU Wall
     ax = axes[0]
@@ -910,55 +917,88 @@ def make_live_heron_figure(out_dir: str) -> None:
     ax.plot(ns, np.full_like(ns, 3), "^-", lw=2.4, ms=6.5, color="#0072B2", label="QER-Res ($3$ ckts, $\\mathcal{O}(1)$)")
     ax.plot(ns, np.full_like(ns, 2), "o-", lw=2.0, ms=5.0, color="#009E73", label="QER-Grad ($2$ ckts, $\\mathcal{O}(1)$)")
     ax.axvline(26, color="#D55E00", ls=":", lw=1.6)
-    ax.axvspan(26, 175, color="#D55E00", alpha=0.07)
-    ax.text(30, 22, "Exact $2^N$ GPU Wall\n($>32$ GB VRAM)", fontsize=8.8, color="#A84300", fontweight="bold")
-    ax.annotate("526 ckts/samp\n(0 steps @ 38k sh)", xy=(128, 526), xytext=(36, 420),
-                arrowprops=dict(arrowstyle="->", color="#CC79A7", lw=1.2), fontsize=8.5, color="#882255", fontweight="bold")
+    ax.axvspan(26, 185, color="#D55E00", alpha=0.07)
+    ax.text(29, 20, "Exact $2^N$ GPU Wall\n($>32$ GB VRAM)", fontsize=8.4, color="#A84300", fontweight="bold")
+    ax.annotate("664 ckts/samp @156q\n(0 steps @ 38k sh)", xy=(156, 664), xytext=(22, 460),
+                arrowprops=dict(arrowstyle="->", color="#CC79A7", lw=1.2), fontsize=8.0, color="#882255", fontweight="bold")
     ax.set_xscale("log", base=2)
     ax.set_yscale("log")
     ax.set_xticks([8, 16, 32, 64, 128])
-    ax.set_xticklabels(["8", "16", "32", "64", "128"])
-    ax.set_xlim(7, 175)
-    ax.set_ylim(1.3, 1200)
+    ax.set_xticklabels(["8", "16", "32", "64", "128"], fontsize=8.8)
+    ax.set_xlim(7, 185)
+    ax.set_ylim(1.3, 1400)
     ax.set_xlabel("Qubits $n$ (log scale)")
     ax.set_ylabel("Circuits / Sample (log scale)")
-    ax.set_title("(a) $\\mathcal{O}(1)$ Scaling Past $2^N$ Wall")
-    ax.legend(loc="lower right", fontsize=8.0, framealpha=0.93)
+    ax.set_title("(a) $\\mathcal{O}(1)$ Scaling to 156q Heron R2")
+    ax.legend(loc="lower right", fontsize=7.6, framealpha=0.93)
     ax.grid(True, ls="--", alpha=0.25)
 
-    # Panel (b): Live 128q ibm_kingston Frustrated Heavy-Hex Spin Glass (38,016 shots, 0 SWAPs)
+    # Panel (b): Live 128q & 156q ibm_kingston Frustrated Heavy-Hex Spin Glass (0 SWAPs)
     ax = axes[1]
     sg = p1["heavy_hex_spinglass"]
+    s43 = p1.get("heavy_hex_spinglass_seed43", {})
+    f156 = p1.get("heavy_hex_spinglass_156q_fullchip", {}).get("results", {})
+    spsa_vals = [sg["spsa_qpu"]["satisfied_bonds_pct"]] + ([s43["spsa_qpu"]["satisfied_bonds_pct"]] if "spsa_qpu" in s43 else [])
+    qer_vals = [sg["qerd_qpu"]["satisfied_bonds_pct"]] + ([s43["qerd_qpu"]["satisfied_bonds_pct"]] if "qerd_qpu" in s43 else [])
     items_b = [
-        ("Random\nDraw", sg["untrained_baseline"]["satisfied_bonds_pct"], "#999999", "E=-0.3"),
-        ("QER-Res\n128q Live", sg["qerd_qpu"]["satisfied_bonds_pct"], "#0072B2", "E=-89.1\n(71.9% gap)"),
-        ("SA Target\nCeiling", sg["sa_ceiling"]["satisfied_bonds_pct"], "#009E73", "E=-123.8"),
+        ("C-PSR\n128q", sg["coord_psr_qpu"]["satisfied_bonds_pct"], [], "#882255"),
+        ("no-zz\n128q", sg["nozz_qpu"]["satisfied_bonds_pct"], [], "#999999"),
+        ("96-Dir SPSA\n128q (2 inst)", float(np.mean(spsa_vals)), spsa_vals, "#E69F00"),
+        ("QER-Res\n156q Full", f156["qerd_qpu"]["satisfied_bonds_pct"], [], "#56B4E9"),
+        ("QER-Res\n128q (2 inst)", float(np.mean(qer_vals)), qer_vals, "#0072B2"),
+        ("SA\nCeiling", sg["sa_ceiling"]["satisfied_bonds_pct"], [], "#009E73"),
     ]
     xb = np.arange(len(items_b))
-    bb = ax.bar(xb, [v for _, v, _, _ in items_b], color=[c for _, _, c, _ in items_b], edgecolor="#222222", linewidth=1.0, width=0.52)
-    bb[1].set_linewidth(2.0)
+    bb = ax.bar(
+        xb,
+        [v for _, v, _, _ in items_b],
+        color=[c for _, _, _, c in items_b],
+        edgecolor="#222222",
+        linewidth=1.0,
+        width=0.60,
+    )
+    bb[4].set_linewidth(2.0)
+    # Plot exact per-instance dots (seed=42 circle, seed=43 diamond) instead of n=2 SD bars
+    for i, (_, v, pts, _) in enumerate(items_b):
+        if len(pts) == 2:
+            ax.plot([i, i], [min(pts), max(pts)], color="#111111", lw=1.2, zorder=4)
+            ax.scatter([i], [pts[0]], s=26, marker="o", color="white", edgecolor="#111111", lw=1.0, zorder=5,
+                       label="seed=42" if i == 2 else None)
+            ax.scatter([i], [pts[1]], s=28, marker="D", color="#111111", edgecolor="white", lw=0.6, zorder=5,
+                       label="seed=43" if i == 2 else None)
     ax.axhline(50.0, color="#666666", ls="--", lw=1.0, label="Zero-Bias / Random (50%)")
-    for bar, (_, v, _, sub) in zip(bb, items_b):
-        ax.text(bar.get_x() + bar.get_width() / 2, v + 2.0, f"{v:.1f}%\n{sub}", ha="center", va="bottom", fontsize=8.4, fontweight="bold")
+    for bar, (_, v, pts, _) in zip(bb, items_b):
+        y_top = max(pts) if pts else v
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            y_top + 2.4,
+            f"{v:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=7.9,
+            fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.08", fc="white", ec="none", alpha=0.88),
+        )
     ax.set_xticks(xb)
-    ax.set_xticklabels([l for l, _, _, _ in items_b], fontsize=9.2)
-    ax.set_ylim(0, 122)
+    ax.set_xticklabels([l for l, _, _, _ in items_b], fontsize=7.4)
+    ax.set_ylim(0, 118)
     ax.set_ylabel("Satisfied Frustrated Bonds (%) ↑")
-    ax.set_title("(b) Live 128q Heavy-Hex Spin Glass")
-    ax.legend(loc="upper left", fontsize=8.0, framealpha=0.92)
+    ax.set_title("(b) Live 128q & 156q Heavy-Hex Spin Glass")
+    ax.legend(loc="upper left", fontsize=7.2, framealpha=0.92)
     ax.grid(axis="y", ls="--", alpha=0.25)
 
-    # Panel (c): Live 128q ibm_kingston Promoter DNA Feasibility (Honest Multi-Metric View)
+    # Panel (c): Live 128q ibm_kingston Fixed-TATA Promoter DNA Suite (Honest 4-Way Live Controls)
     ax = axes[2]
     dc = p2["comparison"]
     models_c = [
-        ("Untrained\n128q QPU", dc["untrained_qpu"]),
-        ("QER-Res\n128q Live", dc["qerd_qpu"]),
-        ("Classical\nMarkov", dc["classical_markov"]),
-        ("Real DNA\n(Unfilt.)", dc["real_promoters"]),
+        ("Untr.\nQPU", dc["untrained_qpu"]),
+        ("96-Dir\nSPSA", dc["spsa_qpu"]),
+        ("QER-Res\n128q", dc["qerd_qpu"]),
+        ("no-zz\n128q", dc["nozz_qpu"]),
+        ("Real\nDNA", dc["real_promoters"]),
     ]
     xc = np.arange(len(models_c))
-    w = 0.26
+    w = 0.25
     act = [100.0 * m["mean_oracle_prob"] for _, m in models_c]
     val = [m["valid_promoter_pct"] for _, m in models_c]
     tata = [m["tata_cond_box_pct"] for _, m in models_c]
@@ -966,15 +1006,15 @@ def make_live_heron_figure(out_dir: str) -> None:
     ax.bar(xc, val, width=w, color="#009E73", edgecolor="#222222", lw=0.7, label="Biophys. Valid %")
     ax.bar(xc + w, tata, width=w, color="#E69F00", edgecolor="#222222", lw=0.7, label="TATA-Cond Box %")
     for i in range(len(models_c)):
-        ax.text(xc[i] - w, act[i] + 1.8, f"{act[i]:.0f}", ha="center", va="bottom", fontsize=7.6, fontweight="bold")
-        ax.text(xc[i], val[i] + 1.8, f"{val[i]:.0f}", ha="center", va="bottom", fontsize=7.6, fontweight="bold")
-        ax.text(xc[i] + w, tata[i] + 1.8, f"{tata[i]:.0f}", ha="center", va="bottom", fontsize=7.6, fontweight="bold")
+        ax.text(xc[i] - w, act[i] + 1.8, f"{act[i]:.0f}", ha="center", va="bottom", fontsize=7.0, fontweight="bold")
+        ax.text(xc[i], val[i] + 1.8, f"{val[i]:.0f}", ha="center", va="bottom", fontsize=7.0, fontweight="bold")
+        ax.text(xc[i] + w, tata[i] + 1.8, f"{tata[i]:.0f}", ha="center", va="bottom", fontsize=7.0, fontweight="bold")
     ax.set_xticks(xc)
-    ax.set_xticklabels([l for l, _ in models_c], fontsize=8.5)
+    ax.set_xticklabels([l for l, _ in models_c], fontsize=8.0)
     ax.set_ylim(0, 118)
     ax.set_ylabel("Metric (%) ↑")
-    ax.set_title("(c) Live 128q DNA Feasibility (Caveated)")
-    ax.legend(loc="upper right", fontsize=7.6, framealpha=0.93)
+    ax.set_title("(c) Live 128q Fixed-TATA DNA Controls")
+    ax.legend(loc="upper left", fontsize=7.2, framealpha=0.93)
     ax.grid(axis="y", ls="--", alpha=0.25)
 
     fig.tight_layout()
@@ -997,10 +1037,12 @@ def make_control_figures(res: Dict[str, Any], out_dir: str) -> None:
 
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(root, "projects", "sp500_qubo_and_spinglass", "artifacts", "metrics.json"), "r", encoding="utf-8") as f:
-        sg_live = json.load(f)["heavy_hex_spinglass"]
+        p1_all = json.load(f)
+    sg_live = p1_all["heavy_hex_spinglass"]
+    f156_live = p1_all.get("heavy_hex_spinglass_156q_fullchip", {}).get("results", {})
 
-    # Figure A: 12q Heavy-Hex Strong Baselines + 2Q CNOT Noise Sweep + Live 128q
-    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.0))
+    # Figure A: 12q Heavy-Hex Strong Baselines + 2Q CNOT Noise Sweep + Live 128q/156q seed=42
+    fig, axes = plt.subplots(1, 3, figsize=(14.2, 4.1), gridspec_kw={"width_ratios": [1.18, 1.02, 1.06]})
     ax = axes[0]
     mc = res["exp2"]["main_comparison"]
     order_a = [
@@ -1011,18 +1053,18 @@ def make_control_figures(res: Dict[str, Any], out_dir: str) -> None:
         ("spsa_persample", "16-Dir\nSPSA", "#E69F00"),
         ("spsa_highdir", "64-Dir\nSPSA", "#D55E00"),
         ("qer_res", "QER-Res\n(Ours)", "#0072B2"),
-        ("exact_ad_clean", "Exact-AD\n(Clean)", "#009E73"),
+        ("exact_ad_clean", "Clean\nExact-AD", "#009E73"),
     ]
     xs = np.arange(len(order_a))
     means = [mc[k]["sat_bonds"]["mean"] for k, _, _ in order_a]
     stds = [mc[k]["sat_bonds"]["std"] for k, _, _ in order_a]
-    bars = ax.bar(xs, means, yerr=stds, capsize=3, color=[c for _, _, c in order_a], edgecolor="#222222", lw=0.8, width=0.66)
+    bars = ax.bar(xs, means, yerr=stds, capsize=3, color=[c for _, _, c in order_a], edgecolor="#222222", lw=0.8, width=0.62)
     bars[6].set_linewidth(1.8)
     ax.axhline(50.0, color="#666666", ls="--", lw=1.0)
-    for b, m_v in zip(bars, means):
-        ax.text(b.get_x() + b.get_width() / 2, m_v + 2.8, f"{m_v:.0f}%", ha="center", va="bottom", fontsize=8.3, fontweight="bold")
+    for b, m_v, s_v in zip(bars, means, stds):
+        ax.text(b.get_x() + b.get_width() / 2, m_v + s_v + 2.2, f"{m_v:.0f}%", ha="center", va="bottom", fontsize=8.0, fontweight="bold")
     ax.set_xticks(xs)
-    ax.set_xticklabels([l for _, l, _ in order_a], fontsize=8.1)
+    ax.set_xticklabels([l for _, l, _ in order_a], fontsize=7.5)
     ax.set_ylim(0, 114)
     ax.set_ylabel("Satisfied Frustrated Bonds (%) ↑")
     ax.set_title("(a) 12q Heavy-Hex (38.4k sh, 2Q Noise)")
@@ -1045,22 +1087,34 @@ def make_control_figures(res: Dict[str, Any], out_dir: str) -> None:
 
     ax = axes[2]
     live_items = [
-        ("Random\nDraw", sg_live["untrained_baseline"]["satisfied_bonds_pct"], "#999999"),
-        ("QER-Res\n128q Live", sg_live["qerd_qpu"]["satisfied_bonds_pct"], "#0072B2"),
-        ("SA Target\nCeiling", sg_live["sa_ceiling"]["satisfied_bonds_pct"], "#009E73"),
+        ("C-PSR\n128q", sg_live["coord_psr_qpu"]["satisfied_bonds_pct"], "#882255"),
+        ("Untr.\n128q", sg_live["untrained_qpu"]["satisfied_bonds_pct"], "#AAAAAA"),
+        ("no-zz\n128q", sg_live["nozz_qpu"]["satisfied_bonds_pct"], "#777777"),
+        ("SPSA\n128q", sg_live["spsa_qpu"]["satisfied_bonds_pct"], "#E69F00"),
+        ("QER\n156q", f156_live["qerd_qpu"]["satisfied_bonds_pct"], "#56B4E9"),
+        ("QER\n128q", sg_live["qerd_qpu"]["satisfied_bonds_pct"], "#0072B2"),
+        ("SA\nCeil.", sg_live["sa_ceiling"]["satisfied_bonds_pct"], "#009E73"),
     ]
     xl = np.arange(len(live_items))
-    bl = ax.bar(xl, [v for _, v, _ in live_items], color=[c for _, _, c in live_items], edgecolor="#222222", lw=1.0, width=0.52)
-    bl[1].set_linewidth(2.0)
+    bl = ax.bar(xl, [v for _, v, _ in live_items], color=[c for _, _, c in live_items], edgecolor="#222222", lw=0.9, width=0.62)
+    bl[5].set_linewidth(2.0)
     ax.axhline(50.0, color="#666666", ls="--", lw=1.0)
-    for b, (lbl, v, _) in zip(bl, live_items):
-        extra = "\n(71.9% gap,\n100% uniq)" if "Live" in lbl else ""
-        ax.text(b.get_x() + b.get_width() / 2, v + 2.2, f"{v:.1f}%{extra}", ha="center", va="bottom", fontsize=8.6, fontweight="bold")
+    for b, (_, v, _) in zip(bl, live_items):
+        ax.text(
+            b.get_x() + b.get_width() / 2,
+            v + 2.0,
+            f"{v:.0f}%",
+            ha="center",
+            va="bottom",
+            fontsize=7.8,
+            fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.08", fc="white", ec="none", alpha=0.88),
+        )
     ax.set_xticks(xl)
-    ax.set_xticklabels([l for l, _, _ in live_items], fontsize=9.2)
-    ax.set_ylim(0, 118)
+    ax.set_xticklabels([l for l, _, _ in live_items], fontsize=7.6)
+    ax.set_ylim(0, 114)
     ax.set_ylabel("Satisfied Frustrated Bonds (%) ↑")
-    ax.set_title("(c) Live 128q ibm_kingston (38k sh)")
+    ax.set_title("(c) Live ibm_kingston (Seed 42, 38k–39k sh)")
     ax.grid(axis="y", ls="--", alpha=0.25)
 
     fig.tight_layout()
@@ -1069,7 +1123,7 @@ def make_control_figures(res: Dict[str, Any], out_dir: str) -> None:
     plt.close(fig)
 
     # Figure B: Reciprocity + Scaling SNR + Hybrid STE Controls
-    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.0))
+    fig, axes = plt.subplots(1, 3, figsize=(13.8, 4.2))
     ax = axes[0]
     tr = res["exp1"]["trained_12q_heavyhex_L4"]
     steps_x = [r["step"] for r in tr]
@@ -1080,9 +1134,9 @@ def make_control_figures(res: Dict[str, Any], out_dir: str) -> None:
     ax.axhline(0.0, color="#555555", ls=":", lw=1.0)
     ax.set_xlabel("Training Step (12q Heavy-Hex, $L{=}4$)")
     ax.set_ylabel("Cosine Alignment with Exact VJP")
-    ax.set_ylim(-0.35, 1.08)
+    ax.set_ylim(-0.48, 1.12)
     ax.set_title("(a) Non-Equilibrium Reciprocity Audit")
-    ax.legend(loc="lower left", fontsize=7.8, framealpha=0.93)
+    ax.legend(loc="center right", bbox_to_anchor=(0.99, 0.72), fontsize=7.5, framealpha=0.94)
     ax.grid(True, ls="--", alpha=0.25)
 
     ax = axes[1]
@@ -1100,10 +1154,10 @@ def make_control_figures(res: Dict[str, Any], out_dir: str) -> None:
                     marker=mk, lw=2.0, ms=5.5, capsize=2.5, color=col, label=lbl)
     ax.set_xticks(nqs)
     ax.set_xticklabels([f"{r['n_qubits']}q\n(P={r['n_params']})" for r in sc], fontsize=8.4)
-    ax.set_ylim(-0.05, 1.02)
+    ax.set_ylim(-0.14, 1.02)
     ax.set_ylabel("4k-Shot MSE Cosine SNR ↑")
     ax.set_title("(b) Scaling SNR vs. Strong Baselines")
-    ax.legend(loc="upper right", ncol=2, fontsize=7.5, framealpha=0.93)
+    ax.legend(loc="center right", bbox_to_anchor=(0.99, 0.61), ncol=2, fontsize=7.4, framealpha=0.94)
     ax.grid(True, ls="--", alpha=0.25)
 
     ax = axes[2]
@@ -1119,12 +1173,12 @@ def make_control_figures(res: Dict[str, Any], out_dir: str) -> None:
     m4 = [e4[k]["mse"]["mean"] for k, _, _ in order_4]
     s4 = [e4[k]["mse"]["std"] for k, _, _ in order_4]
     b4 = ax.bar(x4, m4, yerr=s4, capsize=3, color=[c for _, _, c in order_4], edgecolor="#222222", lw=0.9, width=0.58)
-    for b, mv, (k, _, _) in zip(b4, m4, order_4):
-        ax.text(b.get_x() + b.get_width() / 2, mv + 0.025, f"{mv:.3f}\n({e4[k]['sign_acc']['mean']:.0f}%)",
-                ha="center", va="bottom", fontsize=8.1, fontweight="bold")
+    for b, mv, sv, (k, _, _) in zip(b4, m4, s4, order_4):
+        ax.text(b.get_x() + b.get_width() / 2, mv + sv + 0.006, f"{mv:.3f}\n({e4[k]['sign_acc']['mean']:.1f}%)",
+                ha="center", va="bottom", fontsize=7.8, fontweight="bold")
     ax.set_xticks(x4)
-    ax.set_xticklabels([l for _, l, _ in order_4], fontsize=8.4)
-    ax.set_ylim(0, max(m4) * 1.38 + 0.05)
+    ax.set_xticklabels([l for _, l, _ in order_4], fontsize=8.2)
+    ax.set_ylim(0, max(mv + sv for mv, sv in zip(m4, s4)) * 1.32 + 0.015)
     ax.set_ylabel("24-Shot NISQ Test MSE ↓")
     ax.set_title("(c) Hybrid QERLayer vs. STE & Noise-AD")
     ax.grid(axis="y", ls="--", alpha=0.25)

@@ -33,6 +33,8 @@ class RunConfig:
     readout_mitigation: bool = True       # 1-job all-0/all-1 hardware confusion correction
     run_live_spsa: bool = True            # Also run equal-shot SPSA live on QPU when mode=ibm_qpu
     run_live_nozz: bool = True            # Also run zero-ZZ (no-zz) ablation live on QPU when mode=ibm_qpu
+    skip_untrained: bool = False          # Skip QPU sampling of untrained baseline to save QPU quota
+    skip_qerd: bool = False               # Skip QER training when running standalone live baselines
     oracle_epochs: int = 4
     max_train_targets: int = 600          # High-confidence biophysically valid promoter targets
     max_sim_qubits: int = 14
@@ -62,15 +64,15 @@ class RunConfig:
 PRESETS: Dict[str, Dict[str, object]] = {
     "quick": {
         "n_qubits": 16,
-        "n_layers": 3,
+        "n_layers": 2,
         "diffusion_steps": 3,
-        "batches": 20,
-        "batch_size": 12,
-        "shots_per_run": 24,
-        "eval_samples": 32,
-        "eval_shots": 64,
-        "oracle_epochs": 2,
-        "max_sim_qubits": 12,
+        "batches": 8,
+        "batch_size": 8,
+        "shots_per_run": 12,
+        "eval_samples": 16,
+        "eval_shots": 24,
+        "oracle_epochs": 1,
+        "max_sim_qubits": 10,
     },
     "local_cpu": {
         "n_qubits": 16,

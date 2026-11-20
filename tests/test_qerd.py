@@ -96,14 +96,16 @@ class TestQERDPackage(unittest.TestCase):
     def test_experiment_imports(self):
         for mod_name in (
             "experiments.benchmark_mnist",
-            "experiments.run_paper_benchmarks",
-            "experiments.eval_gradient_fidelity",
             "experiments.eval_spinglass_attribution",
-            "experiments.eval_capacity_bottleneck",
             "experiments.eval_conditioning_and_opt",
             "experiments.eval_reciprocity_and_stepper",
             "experiments.eval_matched_controls",
             "experiments.eval_hardware_controls",
+            "experiments.extract_live_distributions",
+            "experiments.run_live_oracle_and_debias_128q",
+            "experiments.audit_saved_hardware_checks",
+            "experiments.plot_live_generative_audit",
+            "experiments.verify_paper_consistency",
         ):
             mod = importlib.import_module(mod_name)
             self.assertIsNotNone(mod)

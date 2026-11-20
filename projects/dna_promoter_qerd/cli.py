@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -234,6 +235,10 @@ def run_benchmark(cfg: RunConfig, clear_outputs: bool = False) -> None:
             np.array([compute_santalucia_dg37(s) for s in seqs], dtype=np.float64),
         )
         seqs_store[key] = seqs
+        if cfg.artifact_dir:
+            os.makedirs(cfg.artifact_dir, exist_ok=True)
+            with open(os.path.join(cfg.artifact_dir, "partial_dna_metrics.json"), "w", encoding="utf-8") as pf:
+                json.dump({"n_qubits": cfg.n_qubits, "comparison": comp}, pf, indent=2)
 
     _record("real_promoters", real_eval_seqs_show, tags=eval_tags[: len(real_eval_seqs_show)])
     if not is_core8:
@@ -252,38 +257,42 @@ def run_benchmark(cfg: RunConfig, clear_outputs: bool = False) -> None:
     _record("classical_markov", cl_seqs, tags=eval_tags)
 
     q_ckpt = os.path.join(cfg.ckpt_dir, f"dna_qerd_{cfg.n_qubits}q.npz")
-    with QuantumIsingDenoiser(
-        data_shape=cfg.n_qubits, cond_dim=2, edges=edges, n_layers=cfg.n_layers,
-        diffusion_steps=cfg.diffusion_steps, cal_mode=cfg.cal_mode,
-        init_gain=0.75, gain_ema=0.10, gain_bounds=(0.40, 1.00), seed=cfg.seed, **model_kw,
-    ) as q_model:
-        if is_live_qpu:
-            print(f"\n[Untrained Baseline] Sampling {cfg.eval_samples} sequences ({cfg.n_qubits}q) on {cfg.device}...", flush=True)
-        un_spins = sample_dna_batch(
-            q_model, eval_conds, cfg.eval_samples, shots_per_step=cfg.eval_shots,
-            sample_temp=cfg.sample_temp, stochastic_decode=cfg.stochastic_decode, ro_cal=ro_cal,
-        )
-        un_seqs = spins_to_core8(un_spins) if is_core8 else spins_to_seqs(un_spins)
-        _record("untrained_qpu", un_seqs, tags=eval_tags)
+    if (not cfg.skip_untrained) or (not cfg.skip_qerd):
+        with QuantumIsingDenoiser(
+            data_shape=cfg.n_qubits, cond_dim=2, edges=edges, n_layers=cfg.n_layers,
+            diffusion_steps=cfg.diffusion_steps, cal_mode=cfg.cal_mode,
+            init_gain=0.75, gain_ema=0.10, gain_bounds=(0.40, 1.00), seed=cfg.seed, **model_kw,
+        ) as q_model:
+            if not cfg.skip_untrained:
+                if is_live_qpu:
+                    print(f"\n[Untrained Baseline] Sampling {cfg.eval_samples} sequences ({cfg.n_qubits}q) on {cfg.device}...", flush=True)
+                un_spins = sample_dna_batch(
+                    q_model, eval_conds, cfg.eval_samples, shots_per_step=cfg.eval_shots,
+                    sample_temp=cfg.sample_temp, stochastic_decode=cfg.stochastic_decode, ro_cal=ro_cal,
+                )
+                un_seqs = spins_to_core8(un_spins) if is_core8 else spins_to_seqs(un_spins)
+                _record("untrained_qpu", un_seqs, tags=eval_tags)
 
-        if is_live_qpu:
-            print(f"[QERD Train ({cfg.nudge_mode})] Running up to {cfg.max_shots:,} shots (sh={cfg.shots_per_run}) on {cfg.device}...", flush=True)
-        qer_stats = train_qerd_dna(
-            q_model, x_tr, cond_tr, max_shots=cfg.max_shots, shots_per_run=cfg.shots_per_run,
-            batch_size=cfg.batch_size, nudge_mode=cfg.nudge_mode, ro_cal=ro_cal, verbose=is_live_qpu,
-        )
-        if is_live_qpu:
-            print(f"[QERD Eval] Sampling {cfg.eval_samples} trained promoter designs on {cfg.device}...", flush=True)
-        qd_spins = sample_dna_batch(
-            q_model, eval_conds, cfg.eval_samples, shots_per_step=cfg.eval_shots,
-            sample_temp=cfg.sample_temp, stochastic_decode=cfg.stochastic_decode, ro_cal=ro_cal,
-        )
-        qd_seqs = spins_to_core8(qd_spins) if is_core8 else spins_to_seqs(qd_spins)
-        _record("qerd_qpu", qd_seqs, tags=eval_tags)
-        comp["qerd_qpu"]["wall_sec"] = qer_stats["wall_sec"]
-        comp["qerd_qpu"]["nudge_align"] = qer_stats["mean_nudge_align"]
-        comp["qerd_qpu"]["mean_gain"] = q_model.calibrator.mean_gain
-        save_dna_checkpoint(q_ckpt, q_model, edges, ro_cal=ro_cal)
+            if not cfg.skip_qerd:
+                if is_live_qpu:
+                    print(f"[QERD Train ({cfg.nudge_mode})] Running up to {cfg.max_shots:,} shots (sh={cfg.shots_per_run}) on {cfg.device}...", flush=True)
+                qer_stats = train_qerd_dna(
+                    q_model, x_tr, cond_tr, max_shots=cfg.max_shots, shots_per_run=cfg.shots_per_run,
+                    batch_size=cfg.batch_size, nudge_mode=cfg.nudge_mode, ro_cal=ro_cal, verbose=is_live_qpu,
+                )
+                if is_live_qpu:
+                    print(f"[QERD Eval] Sampling {cfg.eval_samples} trained promoter designs on {cfg.device}...", flush=True)
+                qd_spins = sample_dna_batch(
+                    q_model, eval_conds, cfg.eval_samples, shots_per_step=cfg.eval_shots,
+                    sample_temp=cfg.sample_temp, stochastic_decode=cfg.stochastic_decode, ro_cal=ro_cal,
+                )
+                qd_seqs = spins_to_core8(qd_spins) if is_core8 else spins_to_seqs(qd_spins)
+                _record("qerd_qpu", qd_seqs, tags=eval_tags)
+                comp["qerd_qpu"]["wall_sec"] = qer_stats["wall_sec"]
+                comp["qerd_qpu"]["nudge_align"] = qer_stats["mean_nudge_align"]
+                comp["qerd_qpu"]["mean_gain"] = q_model.calibrator.mean_gain
+                comp["qerd_qpu"]["shots_used"] = float(qer_stats["shots_used"])
+                save_dna_checkpoint(q_ckpt, q_model, edges, ro_cal=ro_cal)
 
     run_spsa = (cfg.mode == "local_sim") or (is_live_qpu and cfg.run_live_spsa)
     if run_spsa:
@@ -470,8 +479,11 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser.add_argument("--shots-per-run", type=int, default=None)
     parser.add_argument("--nudge-mode", choices=["residual", "target"], default=None)
     parser.add_argument("--skip-scaling", action="store_true")
+    parser.add_argument("--skip-untrained", action="store_true")
+    parser.add_argument("--skip-qerd", action="store_true")
     parser.add_argument("--skip-live-spsa", action="store_true")
     parser.add_argument("--skip-live-nozz", action="store_true")
+    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--artifact-dir", type=str, default=None)
     parser.add_argument("--ckpt-dir", type=str, default=None)
     parser.add_argument("--fetch-data", action="store_true")
@@ -491,8 +503,11 @@ def main(argv: Optional[List[str]] = None) -> None:
         shots_per_run=args.shots_per_run,
         nudge_mode=args.nudge_mode,
         skip_scaling=True if args.skip_scaling else None,
+        skip_untrained=True if args.skip_untrained else None,
+        skip_qerd=True if args.skip_qerd else None,
         run_live_spsa=False if args.skip_live_spsa else None,
         run_live_nozz=False if args.skip_live_nozz else None,
+        seed=args.seed,
         artifact_dir=args.artifact_dir,
         ckpt_dir=args.ckpt_dir,
     )

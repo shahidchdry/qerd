@@ -334,6 +334,7 @@ def train_coord_psr_equal_shot(
     clip_bound: float = 1.30,
     weight_decay: float = 0.015,
     ro_cal: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+    verbose: bool = False,
 ) -> Dict[str, int]:
     """
     Doubly stochastic randomized-coordinate PSR (Sweke et al., 2020) under equal shot budget.
@@ -342,6 +343,7 @@ def train_coord_psr_equal_shot(
     symmetric shifts with `shots_per_shift` shots per query, giving `O(max_shots / (2*k*shots_per_shift))`
     updates instead of full-sweep PSR's step starvation.
     """
+    t_start = time.perf_counter()
     n_p = model.n_qpu_params
     k = max(1, min(int(coords_per_step), n_p))
     sh = max(1, int(shots_per_shift))
@@ -388,6 +390,12 @@ def train_coord_psr_equal_shot(
         mh = m_buf[sel] / (1.0 - b1 ** coord_steps[sel])
         vh = v_buf[sel] / (1.0 - b2 ** coord_steps[sel])
         model.theta[sel] = np.clip(eff_decay * model.theta[sel] + lr * mh / (np.sqrt(vh) + eps), -clip_bound, clip_bound)
+        if verbose and (st == 1 or st % 5 == 0 or st == n_steps):
+            print(
+                f"  [Coord-PSR] Batch {st:02d}/{n_steps:02d} ({k} coords x {sh} sh) | "
+                f"Shots={shots_used:5d} | Wall={time.perf_counter()-t_start:.1f}s",
+                flush=True,
+            )
 
     return {"steps": n_steps, "shots_used": shots_used, "coords_per_step": k, "shots_per_shift": sh}
 

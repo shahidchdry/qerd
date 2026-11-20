@@ -43,7 +43,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import benchmark_mnist as bm
-import eval_capacity_bottleneck as pcd
+pcd = bm
 from qerd import (
     QERConfig,
     QERGradConfig,

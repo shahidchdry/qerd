@@ -2645,5 +2645,75 @@ def main():
     print(f"\nSaved PNG sample grids & results JSON to {args.save_dir}", flush=True)
 
 
+@torch.no_grad()
+def precompute_real_knn_ref(
+    clf: EvalCNN,
+    x_te: np.ndarray,
+    device: torch.device,
+    k: int = 5,
+    max_n: int = 2000,
+    seed: int = 0,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Precompute real test EvalCNN 64-D features and k-NN radii once per seed."""
+    rng = np.random.default_rng(seed)
+    n_te = len(x_te)
+    te_idx = rng.choice(n_te, size=min(max_n, n_te), replace=False) if n_te > max_n else np.arange(n_te)
+    real_feats = []
+    for i in range(0, len(te_idx), 512):
+        bx = torch.from_numpy(x_te[te_idx[i : i + 512]]).to(device)
+        _, ft = clf.forward_features(bx)
+        real_feats.append(ft)
+    r = torch.cat(real_feats, dim=0)
+    d_rr = torch.cdist(r, r)
+    d_rr.fill_diagonal_(1e9)
+    rad_r = torch.kthvalue(d_rr, k, dim=1).values
+    return r, rad_r
+
+
+@torch.no_grad()
+def measure_knn_radius_geometry(
+    ae: ConvLatentAE,
+    clf: EvalCNN,
+    gen_latents: np.ndarray,
+    x_te: np.ndarray,
+    device: torch.device,
+    k: int = 5,
+    max_n: int = 2000,
+    seed: int = 0,
+    cached_real: Tuple[torch.Tensor, torch.Tensor] | None = None,
+) -> Dict[str, float]:
+    """Measure EvalCNN 64-d feature k-NN radii R_i (real), G_j (gen), and coverage gap."""
+    rng = np.random.default_rng(seed)
+    if cached_real is None:
+        r, rad_r = precompute_real_knn_ref(clf, x_te, device, k=k, max_n=max_n, seed=seed)
+    else:
+        r, rad_r = cached_real
+    ge_idx = rng.choice(len(gen_latents), size=min(max_n, len(gen_latents)), replace=False)
+
+    gen_feats = []
+    for i in range(0, len(ge_idx), 512):
+        gz = torch.from_numpy(gen_latents[ge_idx[i : i + 512]].astype(np.float32)).to(device)
+        _, ft = clf.forward_features(ae.decode(gz))
+        gen_feats.append(ft)
+    g = torch.cat(gen_feats, dim=0)
+
+    d_gg = torch.cdist(g, g)
+    d_gg.fill_diagonal_(1e9)
+    rad_g = torch.kthvalue(d_gg, k, dim=1).values
+
+    d_rg = torch.cdist(r, g)
+    min_r_to_g = d_rg.min(dim=1).values
+
+    return {
+        "rad_r_mean": float(rad_r.mean().item()),
+        "rad_r_median": float(rad_r.median().item()),
+        "rad_g_mean": float(rad_g.mean().item()),
+        "rad_g_median": float(rad_g.median().item()),
+        "radius_ratio_mean": float((rad_g.mean() / rad_r.mean()).item()),
+        "min_r_to_g_median": float(min_r_to_g.median().item()),
+        "min_r_to_g_mean": float(min_r_to_g.mean().item()),
+    }
+
+
 if __name__ == "__main__":
     main()

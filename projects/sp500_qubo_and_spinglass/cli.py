@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -54,6 +55,14 @@ def _eval_problem_equal_shot(
     prob_qubits = int(getattr(problem, "n_qubits", cfg.n_qubits))
     is_live_qpu = cfg.mode == "ibm_qpu"
 
+    def _flush_partial() -> None:
+        if not cfg.artifact_dir:
+            return
+        os.makedirs(cfg.artifact_dir, exist_ok=True)
+        p_path = os.path.join(cfg.artifact_dir, f"partial_{problem_name}.json")
+        with open(p_path, "w", encoding="utf-8") as pf:
+            json.dump({"problem": problem_name, "n_qubits": prob_qubits, "n_edges": len(edges), "results": comp}, pf, indent=2)
+
     with QuantumIsingDenoiser(
         data_shape=prob_qubits,
         cond_dim=0,
@@ -91,49 +100,52 @@ def _eval_problem_equal_shot(
 
         for cname, csamp in extra_classical.items():
             comp[cname] = problem.evaluate(csamp, un_cost, sa_cost)
+        _flush_partial()
 
-        if is_live_qpu:
-            print(
-                f"[{problem_name}] Training QERD ({cfg.nudge_mode}, {cfg.cal_mode}) on {cfg.device} "
-                f"({cfg.max_shots:,} shot budget, {prob_qubits}q)...",
-                flush=True,
+        if not cfg.skip_qerd:
+            if is_live_qpu:
+                print(
+                    f"[{problem_name}] Training QERD ({cfg.nudge_mode}, {cfg.cal_mode}) on {cfg.device} "
+                    f"({cfg.max_shots:,} shot budget, {prob_qubits}q)...",
+                    flush=True,
+                )
+            t0 = time.perf_counter()
+            qer_stats = train_qerd_explicit(
+                q_model,
+                x_tr,
+                max_shots=cfg.max_shots,
+                shots_per_run=cfg.shots_per_run,
+                batch_size=cfg.batch_size,
+                nudge_mode=cfg.nudge_mode,
+                ro_cal=ro_cal,
+                verbose=is_live_qpu,
             )
-        t0 = time.perf_counter()
-        qer_stats = train_qerd_explicit(
-            q_model,
-            x_tr,
-            max_shots=cfg.max_shots,
-            shots_per_run=cfg.shots_per_run,
-            batch_size=cfg.batch_size,
-            nudge_mode=cfg.nudge_mode,
-            ro_cal=ro_cal,
-            verbose=is_live_qpu,
-        )
-        t_qerd = time.perf_counter() - t0
-        if is_live_qpu:
-            print(f"[{problem_name}] Sampling trained QERD model ({cfg.eval_samples} samples, {prob_qubits}q)...", flush=True)
-        s_qerd = sample_qerd_batch(
-            q_model,
-            n_samples=cfg.eval_samples,
-            shots_per_step=cfg.eval_shots,
-            step_noise_scale=step_noise_scale,
-            sample_temp=cfg.sample_temp,
-            stochastic_decode=stochastic_decode,
-            ro_cal=ro_cal,
-        )
-        comp["qerd_qpu"] = problem.evaluate(s_qerd, un_cost, sa_cost)
-        comp["qerd_qpu"]["wall_sec"] = t_qerd
-        comp["qerd_qpu"]["nudge_align"] = qer_stats["mean_nudge_align"]
-        comp["qerd_qpu"]["mean_gain"] = q_model.calibrator.mean_gain
-        comp["qerd_qpu"]["shots_used"] = float(qer_stats["shots_used"])
-        save_qerd_checkpoint(
-            ckpt_path,
-            q_model,
-            edges,
-            problem_name,
-            tickers=getattr(problem, "tickers", None),
-            ro_cal=ro_cal,
-        )
+            t_qerd = time.perf_counter() - t0
+            if is_live_qpu:
+                print(f"[{problem_name}] Sampling trained QERD model ({cfg.eval_samples} samples, {prob_qubits}q)...", flush=True)
+            s_qerd = sample_qerd_batch(
+                q_model,
+                n_samples=cfg.eval_samples,
+                shots_per_step=cfg.eval_shots,
+                step_noise_scale=step_noise_scale,
+                sample_temp=cfg.sample_temp,
+                stochastic_decode=stochastic_decode,
+                ro_cal=ro_cal,
+            )
+            comp["qerd_qpu"] = problem.evaluate(s_qerd, un_cost, sa_cost)
+            comp["qerd_qpu"]["wall_sec"] = t_qerd
+            comp["qerd_qpu"]["nudge_align"] = qer_stats["mean_nudge_align"]
+            comp["qerd_qpu"]["mean_gain"] = q_model.calibrator.mean_gain
+            comp["qerd_qpu"]["shots_used"] = float(qer_stats["shots_used"])
+            save_qerd_checkpoint(
+                ckpt_path,
+                q_model,
+                edges,
+                problem_name,
+                tickers=getattr(problem, "tickers", None),
+                ro_cal=ro_cal,
+            )
+            _flush_partial()
 
     run_spsa = (cfg.mode == "local_sim") or (is_live_qpu and cfg.run_live_spsa)
     if run_spsa:
@@ -152,7 +164,7 @@ def _eval_problem_equal_shot(
         ) as spsa_m:
             if is_live_qpu:
                 print(f"[{problem_name}] Training equal-shot SPSA on {cfg.device} ({cfg.max_shots:,} shots, {prob_qubits}q)...", flush=True)
-            train_spsa_equal_shot(
+            spsa_stats = train_spsa_equal_shot(
                 spsa_m,
                 x_tr,
                 max_shots=cfg.max_shots,
@@ -171,6 +183,11 @@ def _eval_problem_equal_shot(
                 ro_cal=ro_cal,
             )
             comp["spsa_qpu"] = problem.evaluate(s_spsa, un_cost, sa_cost)
+            comp["spsa_qpu"]["shots_used"] = float(spsa_stats["shots_used"])
+            comp["spsa_qpu"]["steps_executed"] = float(spsa_stats["steps"])
+            comp["spsa_qpu"]["n_dirs"] = float(spsa_stats["n_dirs"])
+            comp["spsa_qpu"]["shots_per_run_spsa"] = float(spsa_stats["shots_per_run_spsa"])
+            _flush_partial()
 
     if cfg.mode == "local_sim":
         with QuantumIsingDenoiser(
@@ -205,6 +222,8 @@ def _eval_problem_equal_shot(
             comp["psr_qpu"] = problem.evaluate(s_psr, un_cost, sa_cost)
             comp["psr_qpu"]["steps_executed"] = float(psr_info["steps"])
 
+    run_cpsr = (cfg.mode == "local_sim") or (is_live_qpu and cfg.run_live_coord_psr)
+    if run_cpsr:
         with QuantumIsingDenoiser(
             data_shape=prob_qubits,
             cond_dim=0,
@@ -218,13 +237,22 @@ def _eval_problem_equal_shot(
             seed=cfg.seed,
             **model_kw,
         ) as cpsr_m:
+            if is_live_qpu and cpsr_m.n_qpu_params >= 64:
+                cpsr_k = min(128, cpsr_m.n_qpu_params)
+                cpsr_sh = 8
+            else:
+                cpsr_k = min(8, max(2, cpsr_m.n_qpu_params // 3))
+                cpsr_sh = 4
+            if is_live_qpu:
+                print(f"[{problem_name}] Training equal-shot Coord-PSR ({cpsr_k} coords x {cpsr_sh} sh) on {cfg.device} ({cfg.max_shots:,} shots, {prob_qubits}q)...", flush=True)
             cpsr_info = train_coord_psr_equal_shot(
                 cpsr_m,
                 x_tr,
                 max_shots=cfg.max_shots,
-                shots_per_shift=4,
-                coords_per_step=min(8, max(2, cpsr_m.n_qpu_params // 3)),
+                shots_per_shift=cpsr_sh,
+                coords_per_step=cpsr_k,
                 ro_cal=ro_cal,
+                verbose=is_live_qpu,
             )
             s_cpsr = sample_qerd_batch(
                 cpsr_m,
@@ -237,6 +265,10 @@ def _eval_problem_equal_shot(
             )
             comp["coord_psr_qpu"] = problem.evaluate(s_cpsr, un_cost, sa_cost)
             comp["coord_psr_qpu"]["steps_executed"] = float(cpsr_info["steps"])
+            comp["coord_psr_qpu"]["shots_used"] = float(cpsr_info["shots_used"])
+            comp["coord_psr_qpu"]["coords_per_step"] = float(cpsr_info["coords_per_step"])
+            comp["coord_psr_qpu"]["shots_per_shift"] = float(cpsr_info["shots_per_shift"])
+            _flush_partial()
 
     run_nozz = (cfg.mode == "local_sim") or (is_live_qpu and cfg.run_live_nozz)
     if run_nozz:
@@ -275,6 +307,7 @@ def _eval_problem_equal_shot(
                 ro_cal=ro_cal,
             )
             comp["nozz_qpu"] = problem.evaluate(s_nozz, un_cost, sa_cost)
+            _flush_partial()
 
     return comp
 
@@ -559,12 +592,17 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser.add_argument("--sample-temp", type=float, default=None)
     parser.add_argument("--no-readout-mitigation", action="store_true")
     parser.add_argument("--run-live-spsa", action="store_true")
+    parser.add_argument("--skip-live-spsa", action="store_true")
     parser.add_argument("--run-live-nozz", action="store_true")
+    parser.add_argument("--skip-live-nozz", action="store_true")
+    parser.add_argument("--run-live-coord-psr", action="store_true")
+    parser.add_argument("--skip-qerd", action="store_true")
     parser.add_argument("--skip-untrained", action="store_true")
     parser.add_argument("--skip-minvar", action="store_true")
     parser.add_argument("--max-sim-qubits", type=int, default=None)
     parser.add_argument("--skip-scaling", action="store_true")
     parser.add_argument("--risk-aversion", type=float, default=None)
+    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--artifact-dir", type=str, default=None)
     parser.add_argument("--ckpt-dir", type=str, default=None)
     parser.add_argument("--audit-heron", action="store_true", help="Print Heron R2 hardware comparison only")
@@ -588,13 +626,16 @@ def main(argv: Optional[List[str]] = None) -> None:
         nudge_mode=args.nudge_mode,
         sample_temp=args.sample_temp,
         readout_mitigation=False if args.no_readout_mitigation else None,
-        run_live_spsa=True if args.run_live_spsa else None,
-        run_live_nozz=True if args.run_live_nozz else None,
+        run_live_spsa=False if args.skip_live_spsa else (True if args.run_live_spsa else None),
+        run_live_nozz=False if args.skip_live_nozz else (True if args.run_live_nozz else None),
+        run_live_coord_psr=True if args.run_live_coord_psr else None,
+        skip_qerd=True if args.skip_qerd else None,
         skip_untrained=True if args.skip_untrained else None,
         skip_minvar=True if args.skip_minvar else None,
         max_sim_qubits=args.max_sim_qubits,
         skip_scaling=True if args.skip_scaling else None,
         risk_aversion=args.risk_aversion,
+        seed=args.seed,
         artifact_dir=args.artifact_dir,
         ckpt_dir=args.ckpt_dir,
     )

@@ -32,6 +32,8 @@ class RunConfig:
     readout_mitigation: bool = True       # 1-job all-0/all-1 live marginal readout calibration
     run_live_spsa: bool = False           # Optional equal-shot live SPSA baseline on ibm_qpu
     run_live_nozz: bool = False           # Optional zero-ZZ ablation live on ibm_qpu
+    run_live_coord_psr: bool = False      # Optional equal-shot live Coord-PSR (Sweke et al.) on ibm_qpu
+    skip_qerd: bool = False               # Skip QER training when running standalone live baselines
     skip_untrained: bool = False          # Skip QPU sampling at th=0 (use random baseline for gap_closed)
     skip_minvar: bool = False             # Run only Heavy-Hex Spin Glass (concentrates QPU quota)
     max_sim_qubits: int = 14

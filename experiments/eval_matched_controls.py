@@ -42,7 +42,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import benchmark_mnist as bm
-import eval_capacity_bottleneck as pcd
+pcd = bm
 import eval_spinglass_attribution as psp
 import eval_reciprocity_and_stepper as prb
 import eval_conditioning_and_opt as prf
