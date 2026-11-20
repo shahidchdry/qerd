@@ -1,8 +1,8 @@
-# Contrastive Field Probing for Finite-Depth Ising Quantum Circuits (`qerd`)
+# Constant-Circuit Contrastive Probing for Ising Quantum Generative Models (`qerd`)
 
 Implementation, controlled $6$--$14$-qubit reciprocity and shot-SNR verification suites, live $128$--$156$-qubit IBM Heron R2 (`ibm_kingston`) hardware audits, and self-contained manuscript for:
 
-> **Contrastive Field Probing for Finite-Depth Ising Quantum Circuits: Non-Equilibrium Reciprocity, Shot-Budget Scaling, and $128$--$156$-Qubit Hardware Audits**
+> **Constant-Circuit Contrastive Probing for Ising Quantum Generative Models**
 
 ---
 
